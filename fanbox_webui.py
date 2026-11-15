@@ -13,6 +13,7 @@ from astrbot.api.web import error_response, json_response, request
 
 from .fanbox_api import FanboxBlocked, FanboxError, FanboxNotFound
 from .fanbox_core import (
+    DEFAULT_CARD_TEMPLATE,
     DEFAULT_TEMPLATE,
     IMAGE_VARIABLES,
     START_MODE_LABELS,
@@ -240,6 +241,7 @@ class FanboxWebUI:
             },
             "template": {
                 "default": DEFAULT_TEMPLATE,
+                "card_default": DEFAULT_CARD_TEMPLATE,
                 "text_variables": TEXT_VARIABLES,
                 "image_variables": IMAGE_VARIABLES,
             },
@@ -367,23 +369,26 @@ class FanboxWebUI:
             return error_response("这位创作者还没有发过帖子", status_code=404)
         fetch_ms = int((time.monotonic() - t_fetch) * 1000)
         t0 = time.monotonic()
-        pieces = await self.plugin.build_pieces(
+        messages = await self.plugin.build_messages(
             post, post.creator_name, "发布了新帖", s
         )
-        out = []
-        for kind, value in pieces:
-            if kind == "text":
-                out.append({"type": "text", "text": value})
-            else:
-                mime = "image/png" if value[:4] == b"\x89PNG" else "image/jpeg"
-                b64 = base64.b64encode(value).decode("ascii")
-                out.append(
-                    {
-                        "type": "image",
-                        "src": f"data:{mime};base64,{b64}",
-                        "bytes": len(value),
-                    }
-                )
+        out_messages = []
+        for message in messages:
+            out = []
+            for kind, value in message:
+                if kind == "text":
+                    out.append({"type": "text", "text": value})
+                else:
+                    mime = "image/png" if value[:4] == b"\x89PNG" else "image/jpeg"
+                    b64 = base64.b64encode(value).decode("ascii")
+                    out.append(
+                        {
+                            "type": "image",
+                            "src": f"data:{mime};base64,{b64}",
+                            "bytes": len(value),
+                        }
+                    )
+            out_messages.append(out)
         return json_response(
             {
                 "creator": cid,
@@ -398,7 +403,10 @@ class FanboxWebUI:
                     "published": post.published,
                 },
                 "style": s.push_style,
-                "pieces": out,
+                "card_text": s.card_text,
+                # 每条消息一组片段；同一条消息里的文字和图片在 QQ 里是一条原生消息
+                "messages": out_messages,
+                "pieces": [piece for message in out_messages for piece in message],
                 "fetch_ms": fetch_ms,
                 "ms": int((time.monotonic() - t0) * 1000),
             }

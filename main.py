@@ -26,11 +26,13 @@ from .fanbox_core import (
     Post,
     advance_state,
     build_variables,
+    card_messages,
     format_ts,
     initial_state,
     parse_creator_id,
     parse_posts,
     render_template,
+    render_text_only,
     select_new_posts,
     start_floor,
     subscribed_at,
@@ -58,6 +60,13 @@ KV_STATS = "fanbox_stats_v1"
 LIST_LIMIT = 10
 
 Piece = tuple[str, Any]  # ("text", str) 或 ("image", bytes)
+
+
+def _style_tag(s: Settings) -> str:
+    """推送记录里的样式标记：text / card / card_merge / card_separate。"""
+    if s.push_style != "card" or s.card_text == "none":
+        return s.push_style
+    return "card_" + s.card_text
 
 
 def _post_brief(post: Post) -> dict[str, Any]:
@@ -500,6 +509,37 @@ class FanboxPlugin(Star):
         self.stats.record_card(True, int((time.monotonic() - t0) * 1000))
         return data
 
+    async def build_messages(
+        self,
+        post: Post,
+        name: str,
+        headline: str = "发布了新帖",
+        s: Settings | None = None,
+    ) -> list[list[Piece]]:
+        """按推送样式生成要发的消息：每条消息是一组片段 ("text", 文字) 或 ("image", 图片字节)。
+
+        同一条消息里的文字和图片由 QQ 原生合成一条发送（不是合并转发）。
+        """
+        s = s or self.s
+        cache: dict[str, bytes | None] = {}
+        name = name or post.creator_name or post.creator_id
+        if s.push_style == "card":
+            try:
+                card = await self._render_card(post, name, cache, s)
+            except Exception as exc:
+                logger.warning(
+                    f"[FANBOX] 帖子 {post.id} 卡片图渲染失败，改发文字模板: {exc}"
+                )
+            else:
+                text = ""
+                if s.card_text != "none":
+                    values = build_variables(
+                        post, name, s.style, headline, self._cover_allowed(post, s)
+                    )
+                    text = render_text_only(s.card_template, values)
+                return card_messages(card, text, s.card_text)
+        return [await self._template_pieces(post, name, headline, s, cache)]
+
     async def build_pieces(
         self,
         post: Post,
@@ -507,18 +547,19 @@ class FanboxPlugin(Star):
         headline: str = "发布了新帖",
         s: Settings | None = None,
     ) -> list[Piece]:
-        """按推送样式生成消息片段：("text", 文字) 或 ("image", 图片字节)。"""
-        s = s or self.s
-        cache: dict[str, bytes | None] = {}
-        name = name or post.creator_name or post.creator_id
-        if s.push_style == "card":
-            try:
-                return [("image", await self._render_card(post, name, cache, s))]
-            except Exception as exc:
-                logger.warning(
-                    f"[FANBOX] 帖子 {post.id} 卡片图渲染失败，改发文字模板: {exc}"
-                )
+        """全部消息的片段按顺序摊平（兼容旧调用）。"""
+        messages = await self.build_messages(post, name, headline, s)
+        return [piece for message in messages for piece in message]
 
+    async def _template_pieces(
+        self,
+        post: Post,
+        name: str,
+        headline: str,
+        s: Settings,
+        cache: dict[str, bytes | None],
+    ) -> list[Piece]:
+        """按“推送模板”生成一条消息的片段。"""
         values = build_variables(
             post, name, s.style, headline, self._cover_allowed(post, s)
         )
@@ -544,17 +585,25 @@ class FanboxPlugin(Star):
                 pieces.append(("image", data))
         return pieces or [("text", post.url)]
 
-    async def _build_chain(
-        self,
-        post: Post,
-        name: str,
-        headline: str = "发布了新帖",
-        s: Settings | None = None,
-    ) -> list:
-        chain: list = []
-        for kind, value in await self.build_pieces(post, name, headline, s):
-            chain.append(Plain(value) if kind == "text" else Image.fromBytes(value))
-        return chain
+    @staticmethod
+    def _to_chain(pieces: list[Piece]) -> list:
+        return [
+            Plain(value) if kind == "text" else Image.fromBytes(value)
+            for kind, value in pieces
+        ]
+
+    async def _send_messages(self, umo: str, messages: list[list[Piece]]) -> str:
+        """按顺序把每条消息发到会话。返回错误说明，全部成功返回空字符串。"""
+        for pieces in messages:
+            try:
+                ok = await self.context.send_message(
+                    umo, MessageChain(chain=self._to_chain(pieces))
+                )
+                if ok is False:
+                    return "找不到会话"
+            except Exception as exc:
+                return str(exc) or exc.__class__.__name__
+        return ""
 
     async def send_test(self, umo: str, post: Post, s: Settings) -> str:
         """插件页"测试推送"：按给定样式把一篇帖子发到指定会话。返回错误说明，成功返回空字符串。
@@ -562,14 +611,9 @@ class FanboxPlugin(Star):
         只记进推送记录（标成测试），不改订阅进度，也不计入推送统计。
         """
         name = post.creator_name or post.creator_id
-        chain = await self._build_chain(post, name, s=s)
-        error = ""
-        try:
-            ok = await self.context.send_message(umo, MessageChain(chain=chain))
-            if ok is False:
-                error = "找不到会话"
-        except Exception as exc:
-            error = str(exc) or exc.__class__.__name__
+        error = await self._send_messages(
+            umo, await self.build_messages(post, name, s=s)
+        )
         self.stats.record_push(
             post.creator_id,
             name=name,
@@ -577,7 +621,7 @@ class FanboxPlugin(Star):
             title=post.title,
             post_url=post.url,
             umo=umo,
-            style=s.push_style,
+            style=_style_tag(s),
             ok=not error,
             error=error,
             card=_card_info(post),
@@ -592,21 +636,16 @@ class FanboxPlugin(Star):
 
     async def _send_post(self, umo: str, post: Post, name: str, s: Settings) -> bool:
         name = name or post.creator_name or post.creator_id
-        chain = await self._build_chain(post, name, s=s)
-        error = ""
-        try:
-            ok = await self.context.send_message(umo, MessageChain(chain=chain))
-            if ok is False:
-                error = "找不到会话"
-        except Exception as exc:
-            error = str(exc) or exc.__class__.__name__
+        error = await self._send_messages(
+            umo, await self.build_messages(post, name, s=s)
+        )
         info = dict(
             name=name,
             post_id=post.id,
             title=post.title,
             post_url=post.url,
             umo=umo,
-            style=s.push_style,
+            style=_style_tag(s),
             card=_card_info(post),
         )
         if error:
@@ -757,9 +796,8 @@ class FanboxPlugin(Star):
         if post is None:
             yield event.plain_result(f"{cid} 还没有发过帖子")
             return
-        yield event.chain_result(
-            await self._build_chain(post, post.creator_name, "的最新帖子")
-        )
+        for pieces in await self.build_messages(post, post.creator_name, "的最新帖子"):
+            yield event.chain_result(self._to_chain(pieces))
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("fanbox检查", alias={"fanbox_check"})

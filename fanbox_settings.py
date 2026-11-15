@@ -13,6 +13,8 @@ from typing import Any
 
 try:
     from .fanbox_core import (
+        CARD_TEXT_MODES,
+        DEFAULT_CARD_TEMPLATE,
         DEFAULT_TEMPLATE,
         START_MODES,
         StyleOptions,
@@ -21,6 +23,8 @@ try:
     )
 except ImportError:  # 测试时作为顶层模块导入
     from fanbox_core import (
+        CARD_TEXT_MODES,
+        DEFAULT_CARD_TEMPLATE,
         DEFAULT_TEMPLATE,
         START_MODES,
         StyleOptions,
@@ -42,7 +46,7 @@ INT_RANGES: dict[str, tuple[int | None, int | None]] = {
     "card_excerpt_lines": (0, 6),
     "card_title_lines": (1, 4),
 }
-MAX_TEXT = {"message_template": 4000}
+MAX_TEXT = {"message_template": 4000, "card_template": 4000}
 MAX_STRING = 500
 
 
@@ -171,6 +175,9 @@ class Settings:
     push_style: str = "text"
     template: str = DEFAULT_TEMPLATE
     template_is_default: bool = True
+    card_text: str = "merge"
+    card_template: str = DEFAULT_CARD_TEMPLATE
+    card_template_is_default: bool = True
     send_cover: bool = True
     send_adult_cover: bool = False
     style: StyleOptions = field(default_factory=StyleOptions)
@@ -225,6 +232,18 @@ def build_settings(values: dict[str, dict[str, Any]]) -> tuple[Settings, list[st
             "推送模板里有不认识的变量，会原样显示: "
             + "、".join("{" + b + "}" for b in bad)
         )
+    card_text = _str(flat.get("card_text", "merge")).strip().lower()
+    if card_text not in CARD_TEXT_MODES:
+        warnings.append(f"未知的卡片图配文方式 {card_text!r}，改用 merge")
+        card_text = "merge"
+    raw_card_template = _str(flat.get("card_template", ""))
+    card_template = raw_card_template or DEFAULT_CARD_TEMPLATE
+    bad = unknown_variables(card_template)
+    if bad:
+        warnings.append(
+            "卡片图配文模板里有不认识的变量，会原样显示: "
+            + "、".join("{" + b + "}" for b in bad)
+        )
 
     style = StyleOptions(
         excerpt_max=_int(flat.get("excerpt_max_chars", 120), 120, "excerpt_max_chars"),
@@ -267,6 +286,10 @@ def build_settings(values: dict[str, dict[str, Any]]) -> tuple[Settings, list[st
         push_style=push_style,
         template=template,
         template_is_default=(not raw_template) or raw_template == DEFAULT_TEMPLATE,
+        card_text=card_text,
+        card_template=card_template,
+        card_template_is_default=(not raw_card_template)
+        or raw_card_template == DEFAULT_CARD_TEMPLATE,
         send_cover=_bool(flat.get("send_cover"), True),
         send_adult_cover=_bool(flat.get("send_adult_cover"), False),
         style=style,

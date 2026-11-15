@@ -345,6 +345,14 @@ DEFAULT_TEMPLATE = """【FANBOX】{creator_name} {headline}
 {post_url}
 {cover_image}"""
 
+# 推送样式为“卡片图”时，配在卡片图上面的文字。卡片图里已经有封面、摘要和标签，这里只放标题和链接。
+DEFAULT_CARD_TEMPLATE = """【FANBOX】{creator_name} {headline}
+《{title}》
+{post_url}"""
+
+# 卡片图配文的发法：只发卡片图 / 文字和卡片图合成一条消息 / 文字和卡片图分两条发
+CARD_TEXT_MODES = ("none", "merge", "separate")
+
 # 模板里能用的全部变量。顺序就是文档里的顺序。
 TEXT_VARIABLES: dict[str, str] = {
     "headline": "推送时是“发布了新帖”，/fanbox最新 时是“的最新帖子”",
@@ -521,6 +529,29 @@ def render_template(template: str, values: dict[str, str]) -> list[tuple[str, st
                 continue
         out.append((kind, val))
     return out
+
+
+def render_text_only(template: str, values: dict[str, str]) -> str:
+    """只取模板渲染结果里的文字（卡片图配文用）：图片变量忽略，各段文字按行拼起来。"""
+    texts = [v for k, v in render_template(template, values) if k == "text"]
+    # 去掉图片变量后，行尾可能留下空格
+    lines = [line.rstrip() for line in "\n".join(texts).split("\n")]
+    return "\n".join(lines).strip("\n")
+
+
+def card_messages(card: Any, text: str, mode: str) -> list[list[tuple[str, Any]]]:
+    """卡片图样式要发的消息：每条消息是一组 ("text", 文字) / ("image", 卡片图) 片段。
+
+    - merge：文字和卡片图合成一条，文字在上、卡片图在下（文字末尾补一个换行，让图片另起一行）
+    - separate：先发文字，再单独发卡片图
+    - none，或配文渲染出来是空的：只发卡片图
+    """
+    text = (text or "").strip("\n")
+    if mode == "none" or not text.strip():
+        return [[("image", card)]]
+    if mode == "separate":
+        return [[("text", text)], [("image", card)]]
+    return [[("text", text + "\n"), ("image", card)]]
 
 
 def format_post_text(

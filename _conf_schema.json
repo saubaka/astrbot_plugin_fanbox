@@ -57,7 +57,7 @@
   "style": {
     "description": "推送样式",
     "type": "object",
-    "hint": "选择发文字还是卡片图，以及文字消息的模板。",
+    "hint": "选择发文字还是卡片图、卡片图怎么配文字，以及两种样式各自的模板。",
     "items": {
       "push_style": {
         "description": "推送样式",
@@ -67,13 +67,30 @@
           "text",
           "card"
         ],
-        "hint": "text = 按下面的“推送模板”发消息（模板里也可以插入图片，包括 {card_image} 卡片图）；card = 只发一张仿 FANBOX 网页样式的卡片图（渲染失败时自动改发文字模板）。"
+        "hint": "text = 按下面的“推送模板”发消息（模板里也可以插入图片，包括 {card_image} 卡片图）；card = 发一张仿 FANBOX 网页样式的卡片图，上面可以配一段按“卡片图配文模板”生成的文字（见“卡片图配文”；渲染失败时自动改发文字模板）。"
+      },
+      "card_text": {
+        "description": "卡片图配文",
+        "type": "string",
+        "default": "merge",
+        "options": [
+          "merge",
+          "separate",
+          "none"
+        ],
+        "hint": "推送样式为 card 时生效。merge = 文字和卡片图合成一条消息（原生的文字加图片，不是合并转发），文字在上、卡片图在下；separate = 先发文字，再单独发卡片图；none = 只发卡片图。"
       },
       "message_template": {
         "description": "推送模板",
         "type": "text",
         "default": "【FANBOX】{creator_name} {headline}\n《{title}》\n{labels}\n{excerpt}\n{tags}\n?发布时间：{published}\n{post_url}\n{cover_image}",
         "hint": "常用变量：{creator_name} 昵称、{title} 标题、{labels} 档位、{excerpt} 摘要、{tags} 标签、{published} 发布时间、{post_url} 链接、{cover_image} 封面图、{card_image} 卡片图。全部 33 个变量和写法规则见插件 README，也可以在 QQ 里发 /fanbox变量 查看。清空即恢复默认模板。"
+      },
+      "card_template": {
+        "description": "卡片图配文模板",
+        "type": "text",
+        "default": "【FANBOX】{creator_name} {headline}\n《{title}》\n{post_url}",
+        "hint": "推送样式为 card、且卡片图配文不是 none 时使用，变量和写法与推送模板相同，但只取文字：模板里的图片变量会被忽略（卡片图里已经有封面和头像）。清空即恢复默认。"
       },
       "send_cover": {
         "description": "附带封面图",
