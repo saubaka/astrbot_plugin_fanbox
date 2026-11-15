@@ -3,7 +3,7 @@
    数据走 window.AstrBotPluginPage 桥：apiGet/apiPost 到插件注册的接口。 */
 (function () {
   "use strict";
-  var bridge = window.AstrBotPluginPage;
+  var bridge = null; // AstrBot 注入的 window.AstrBotPluginPage，启动时等它就绪
 
   var ICON = {
     check: '<svg viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -23,6 +23,7 @@
     image: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="2"/><circle cx="6" cy="6.6" r="1.2"/><path d="m2.5 12 3.6-3.6 2.6 2.4 2-1.8 2.8 2.6"/></svg>',
     eye: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.6 8s2.4-4.6 6.4-4.6S14.4 8 14.4 8 12 12.6 8 12.6 1.6 8 1.6 8z"/><circle cx="8" cy="8" r="2"/></svg>',
     trash: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.8 4.2h10.4M6.4 4.2V2.8h3.2v1.4M4.2 4.2l.6 9h6.4l.6-9"/></svg>',
+    copy: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="5.2" y="5.2" width="8.3" height="8.3" rx="2"/><path d="M10.8 5.2V3.9a1.4 1.4 0 0 0-1.4-1.4H3.9a1.4 1.4 0 0 0-1.4 1.4v5.5a1.4 1.4 0 0 0 1.4 1.4h1.3"/></svg>',
     heart: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 14s-5.6-3.4-5.6-7.4A3.1 3.1 0 0 1 8 4.7a3.1 3.1 0 0 1 5.6 1.9C13.6 10.6 8 14 8 14z"/></svg>'
   };
   var GROUP_ICON = { basic: "gear", start: "flag", style: "layers", content: "sliders", card: "image" };
@@ -132,6 +133,13 @@
     if (!bridge) return Promise.reject(new Error("当前页面没有运行在 AstrBot 管理面板里"));
     return method === "GET" ? bridge.apiGet(endpoint, payload) : bridge.apiPost(endpoint, payload || {});
   }
+  function copyText(text) {
+    function fallback() { var ta = document.createElement("textarea"); ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.left = "-9999px"; document.body.appendChild(ta); ta.select(); var ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; } ta.remove(); return ok; }
+    var p;
+    try { p = navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(text).then(function () { return true; }, fallback) : Promise.resolve(fallback()); } catch (e) { p = Promise.resolve(fallback()); }
+    return p.then(function (ok) { if (ok) toast("已复制链接", true); else toast("复制失败，链接：" + text); });
+  }
+  function copyBtn(getUrl) { var b = el("button", "copy"); b.type = "button"; b.title = "复制链接"; b.setAttribute("aria-label", "复制链接"); b.innerHTML = ICON.copy; b.addEventListener("click", function (ev) { ev.stopPropagation(); var u = getUrl(); if (u) copyText(u); }); return b; }
   function errMsg(e) { var m = e && e.message ? e.message : String(e || "未知错误"); try { var j = JSON.parse(m); if (j && j.message) return j.message; } catch (x) { /* plain text */ } return m; }
 
   /* ---------- 会话名字 ---------- */
@@ -150,9 +158,9 @@
   function buildTiles() { var box = document.getElementById("tiles"); box.textContent = ""; TILE_DEFS.forEach(function (d, i) { var t = later(el("div", "tile enter"), 180 + i * 55); var l = el("span", "lbl"); l.appendChild(iconEl(d[2], "ic")); l.appendChild(el("span", "", d[1])); var v = el("span", "val sk", "0000"); v.setAttribute("data-v", "0"); var n = el("span", "note", NBSP); t.appendChild(l); t.appendChild(v); t.appendChild(n); box.appendChild(t); tileRefs[d[0]] = { val: v, note: n }; }); }
   function renderHero() {
     var st = data.stats, ser = st.series, pl = data.plugin, hero = document.getElementById("heroNum");
-    if (hero.classList.contains("sk")) { hero.classList.remove("sk"); fx(hero, [{ opacity: 0, filter: "blur(10px)", transform: "translateY(10px)", offset: 0 }], { duration: 1000, easing: EASE }); }
+    if (hero.classList.contains("sk")) { hero.classList.remove("sk"); fx(hero, [{ opacity: 0, transform: "translateY(10px)", offset: 0 }], { duration: 1000, easing: EASE }); }
     setNum(hero, ser.pushes.periods.day, "full");
-    Object.keys(tileRefs).forEach(function (k, i) { var v = tileRefs[k].val; if (v.classList.contains("sk")) { v.classList.remove("sk"); fx(v, [{ opacity: 0, filter: "blur(6px)", transform: "translateY(6px)", offset: 0 }], { duration: 800, delay: i * 45, easing: EASE, fill: "backwards" }); } });
+    Object.keys(tileRefs).forEach(function (k, i) { var v = tileRefs[k].val; if (v.classList.contains("sk")) { v.classList.remove("sk"); fx(v, [{ opacity: 0, transform: "translateY(6px)", offset: 0 }], { duration: 800, delay: i * 45, easing: EASE, fill: "backwards" }); } });
     var hourly = ser.pushes.hourly, peak = Math.max.apply(null, hourly), peakAt = hourly.lastIndexOf(peak);
     setText(document.getElementById("heroMeta"), peak > 0 ? ("每小时峰值 " + full(peak) + " 篇 · " + (peakAt === 23 ? "最近 1 小时" : "约 " + (23 - peakAt) + " 小时前")) : ("最近 24 小时还没有新帖 · 检查了 " + full(ser.checks.periods.day) + " 次"));
     drawSpark(hourly.some(function (v) { return v > 0; }) ? hourly : ser.checks.hourly);
@@ -229,7 +237,7 @@
     body.appendChild(col); body.appendChild(right); card.appendChild(body);
 
     var postBlock = later(el("div", "sub-block rv enter"), base + 300); var pt = el("div", "sub-title"); pt.appendChild(el("span", "", "最新帖子")); var pts = el("small", ""); pt.appendChild(pts); postBlock.appendChild(pt);
-    var post = el("div", "post"); var thumb = el("div", "thumb"); var pm = el("div", "post-main"); var pa = el("a", ""); pa.target = "_blank"; pa.rel = "noopener noreferrer"; var ps = el("span", ""); pm.appendChild(pa); pm.appendChild(ps); var side = el("div", "post-side"); var feePill = el("span", "pill"); var likePill = el("span", "pill p-muted"); side.appendChild(feePill); side.appendChild(likePill);
+    var post = el("div", "post"); var thumb = el("div", "thumb"); var pm = el("div", "post-main"); var trow = el("div", "title-row"); var pa = el("b", ""); trow.appendChild(pa); var pcopy = copyBtn(function () { return pa._url; }); trow.appendChild(pcopy); var ps = el("span", ""); pm.appendChild(trow); pm.appendChild(ps); var side = el("div", "post-side"); var feePill = el("span", "pill"); var likePill = el("span", "pill p-muted"); side.appendChild(feePill); side.appendChild(likePill);
     post.appendChild(thumb); post.appendChild(pm); post.appendChild(side); postBlock.appendChild(post); card.appendChild(postBlock);
 
     var sessBlock = later(el("div", "sub-block rv enter"), base + 340); var stt = el("div", "sub-title"); stt.appendChild(el("span", "", "订阅会话")); var sts = el("small", ""); stt.appendChild(sts); sessBlock.appendChild(stt); var sessList = el("div", ""); sessBlock.appendChild(sessList); card.appendChild(sessBlock);
@@ -288,12 +296,12 @@
     setText(ref.pts, st.post_count != null ? ("列表里最近 " + st.post_count + " 篇") : "");
     updateThumb(ref, latest);
     if (latest) {
-      ref.pa.textContent = latest.title || "（无标题）"; ref.pa.href = latest.url || ("https://" + c.creator + ".fanbox.cc");
+      ref.pa.textContent = latest.title || "（无标题）"; ref.pa.title = ref.pa.textContent; ref.pa._url = latest.url || ("https://" + c.creator + ".fanbox.cc"); ref.pa.nextSibling.hidden = false;
       ref.ps.textContent = "发布于 " + (isoAgo(latest.published) || "—") + (latest.published ? " · " + new Date(latest.published).toLocaleString("zh-CN", { hour12: false }) : "");
       setPill(ref.feePill, latest.fee > 0 ? { cls: "pill p-blue", icon: "lock", text: latest.fee + " 日元" + (latest.adult ? " · R-18" : "") } : { cls: "pill p-good", icon: "check", text: "免费" + (latest.adult ? " · R-18" : "") });
       ref.likePill.hidden = false; ref.likePill.textContent = ""; ref.likePill.appendChild(iconEl("heart")); ref.likePill.appendChild(el("span", "", full(latest.like_count || 0)));
     } else {
-      ref.pa.textContent = "还没有检查过"; ref.pa.removeAttribute("href"); ref.ps.textContent = "下一次检查后显示"; setPill(ref.feePill, { cls: "pill p-muted", icon: "dash", text: "—" }); ref.likePill.hidden = true;
+      ref.pa.textContent = "还没有检查过"; ref.pa._url = ""; ref.pa.nextSibling.hidden = true; ref.ps.textContent = "下一次检查后显示"; setPill(ref.feePill, { cls: "pill p-muted", icon: "dash", text: "—" }); ref.likePill.hidden = true;
     }
 
     var subsByUmo = {}; data.sessions.forEach(function (s) { s.subscriptions.forEach(function (r) { if (r.creator === c.creator) subsByUmo[s.umo] = r; }); });
@@ -333,7 +341,7 @@
   function updatePushRow(row, p) {
     setIcon(row.ic, p.ok ? "o-push" : "o-fail", p.ok ? "send" : "alert");
     row.kind.textContent = p.ok ? "已推送" : "推送失败";
-    row.ep.textContent = ""; var a = el("a", "", p.title || "（无标题）"); if (p.url) { a.href = p.url; a.target = "_blank"; a.rel = "noopener noreferrer"; } row.ep.appendChild(a);
+    row.ep.textContent = ""; row.ep.appendChild(el("span", "ttl", p.title || "（无标题）")); if (p.url) { row.ep.appendChild(copyBtn(function () { return p.url; })); }
     row.desc.textContent = p.name || p.creator;
     row.why.textContent = "推送到 " + sessionLabel(p.umo) + " · " + (p.style === "card" ? "卡片图" : "文字模板");
     row.msg.hidden = p.ok; if (!p.ok) { row.msg.className = "err-msg"; row.msg.textContent = p.error || "没有错误说明"; }
@@ -539,10 +547,21 @@
     document.querySelectorAll("[data-until]").forEach(function (n) { var u = Number(n.getAttribute("data-until")); n.textContent = u > now ? left(u) : "即将检查"; });
     document.querySelectorAll("[data-ago]").forEach(function (n) { var v = Number(n.getAttribute("data-ago")); if (!v) return; if (n.id === "liveText") { var s = Math.round((now - v) / 1000); n.textContent = s < 5 ? "实时 · 刚刚更新" : ("实时 · " + s + " 秒前更新"); } else n.textContent = ago(v); });
   }
+  function showLoadError(msg) {
+    if (data) { toast("刷新失败（" + msg + "），30 秒后重试"); return; }
+    var box = document.getElementById("creators"); var ghost = box.querySelector(":scope > .ghost"); if (ghost) ghost.remove();
+    var card = box.querySelector(":scope > .load-error");
+    if (!card) {
+      card = el("div", "card load-error enter"); card.appendChild(iconEl("alert", "err-ic o-fail")); var t = el("div", ""); t.appendChild(el("b", "", "数据加载失败")); var s = el("span", ""); t.appendChild(s);
+      var retry = el("button", "btn sm", "重试"); retry.type = "button"; retry.addEventListener("click", function () { load(); loadSessions(); }); t.appendChild(retry); card.appendChild(t); box.appendChild(card);
+    }
+    card.querySelector("span").textContent = msg + "。30 秒后会自动重试。";
+  }
+  function clearLoadError() { var c = document.querySelector("#creators > .load-error"); if (c) c.remove(); }
   var loading = false;
   function load() {
     if (loading) return Promise.resolve(); loading = true;
-    return api("GET", "overview").then(function (j) { data = j; render(); setLive(true); }).catch(function (e) { setLive(false); toast("数据加载失败（" + errMsg(e) + "），30 秒后重试"); }).then(function () { loading = false; });
+    return api("GET", "overview").then(function (j) { data = j; clearLoadError(); render(); setLive(true); }).catch(function (e) { setLive(false); showLoadError(errMsg(e)); }).then(function () { loading = false; });
   }
 
   function wire() {
@@ -577,8 +596,20 @@
 
   document.querySelectorAll(".enter").forEach(function (n) { settle(n); });
   buildTiles(); measure(); wire();
-  if (!bridge) { setLive(false, "请从 AstrBot 管理面板打开"); toast("这个页面需要在 AstrBot 管理面板的插件页里打开"); return; }
-  bridge.ready().then(function () {
+  function waitForBridge(timeoutMs) {
+    return new Promise(function (resolve) {
+      var t0 = Date.now();
+      (function poll() { if (window.AstrBotPluginPage) return resolve(window.AstrBotPluginPage); if (Date.now() - t0 > timeoutMs) return resolve(null); setTimeout(poll, 50); })();
+    });
+  }
+  function withTimeout(promise, ms) { return Promise.race([promise, new Promise(function (r) { setTimeout(r, ms); })]); }
+  waitForBridge(8000).then(function (b) {
+    bridge = b;
+    if (!bridge) { setLive(false, "未连接到 AstrBot"); showLoadError("没有找到 AstrBot 的插件页接口（window.AstrBotPluginPage）。请从 AstrBot 管理面板的插件页打开，或刷新一下"); return null; }
+    // ready() 在收到面板发来的上下文后完成；万一面板没发，3 秒后也照常开始
+    return withTimeout(bridge.ready(), 3000).then(function () { return true; });
+  }).then(function (ok) {
+    if (!ok) return;
     load(); loadSessions();
     setInterval(load, REFRESH_MS); setInterval(tick, 1000);
   });
