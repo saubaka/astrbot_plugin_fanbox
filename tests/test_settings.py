@@ -1,6 +1,6 @@
 import pathlib
 
-from fanbox_core import DEFAULT_TEMPLATE
+from fanbox_core import DEFAULT_CARD_TEMPLATE, DEFAULT_TEMPLATE
 from fanbox_settings import (
     INT_RANGES,
     build_settings,
@@ -24,6 +24,25 @@ def test_defaults_build_cleanly():
     assert s.poll_interval == 10 and s.push_style == "text" and s.start_from == "deploy"
     assert s.template == DEFAULT_TEMPLATE and s.template_is_default
     assert s.style.show_fee and s.style.offset_hours == 8
+    assert s.card_text == "merge" and s.card_template == DEFAULT_CARD_TEMPLATE
+    assert s.card_template_is_default
+
+
+def test_card_text_settings():
+    vals = defaults()
+    vals["style"]["card_text"] = "separate"
+    vals["style"]["card_template"] = "{title} {nope}"
+    s, warnings = build_settings(vals)
+    assert s.card_text == "separate" and s.card_template == "{title} {nope}"
+    assert not s.card_template_is_default
+    assert len(warnings) == 1 and "卡片图配文模板" in warnings[0]
+    vals["style"]["card_text"] = "both"
+    vals["style"]["card_template"] = ""
+    s, warnings = build_settings(vals)
+    assert s.card_text == "merge" and s.card_template == DEFAULT_CARD_TEMPLATE
+    assert len(warnings) == 1 and "配文方式" in warnings[0]
+    _, errors = validate({"style": {"card_text": "both"}}, SCHEMA, defaults())
+    assert any("只能是" in e for e in errors)
 
 
 def test_current_values_reads_groups_and_legacy_flat_config():
@@ -140,6 +159,9 @@ def test_page_files_exist():
         "function rebuildChapters",
         "function runPreview",
         "function fbCard",
+        "function updateStyleRows",
+        "card_template",
+        "res.messages",
         "data-chapter",
     ):
         assert needed in js, needed

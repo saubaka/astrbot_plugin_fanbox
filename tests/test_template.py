@@ -2,13 +2,17 @@ import json
 import pathlib
 
 from fanbox_core import (
+    CARD_TEXT_MODES,
+    DEFAULT_CARD_TEMPLATE,
     DEFAULT_TEMPLATE,
     IMAGE_VARIABLES,
     TEXT_VARIABLES,
     StyleOptions,
     build_variables,
     parse_post,
+    card_messages,
     render_template,
+    render_text_only,
     unknown_variables,
 )
 
@@ -160,3 +164,38 @@ def test_schema_template_and_readme_cover_every_variable():
         assert section["type"] == "object"
         for item in section["items"].values():
             assert "type" in item and "default" in item
+
+
+def test_card_template_default_is_short_and_valid():
+    assert unknown_variables(DEFAULT_CARD_TEMPLATE) == []
+    text = render_text_only(DEFAULT_CARD_TEMPLATE, build_variables(make_post()))
+    assert text.splitlines()[1] == "《テスト》"
+    assert text.endswith("https://creator-a.fanbox.cc/posts/100")
+    schema = json.loads((ROOT / "_conf_schema.json").read_text("utf-8"))
+    items = schema["style"]["items"]
+    assert items["card_template"]["default"] == DEFAULT_CARD_TEMPLATE
+    assert items["card_template"]["type"] == "text"
+    assert items["card_text"]["default"] == "merge"
+    assert sorted(items["card_text"]["options"]) == sorted(CARD_TEXT_MODES)
+
+
+def test_render_text_only_ignores_images():
+    tpl = "{card_image}\n《{title}》 {cover_image}\n{avatar_image}\n{post_url}"
+    text = render_text_only(tpl, build_variables(make_post()))
+    assert text == "《テスト》\nhttps://creator-a.fanbox.cc/posts/100"
+
+
+def test_card_messages_modes():
+    card = b"JPEG"
+    # 合成一条：文字在上、卡片图在下，同一条消息
+    assert card_messages(card, "标题\n链接", "merge") == [
+        [("text", "标题\n链接\n"), ("image", card)]
+    ]
+    # 分两条：先文字，再卡片图
+    assert card_messages(card, "标题", "separate") == [
+        [("text", "标题")],
+        [("image", card)],
+    ]
+    # 只发卡片图；配文为空时也只发卡片图
+    assert card_messages(card, "标题", "none") == [[("image", card)]]
+    assert card_messages(card, "\n \n", "merge") == [[("image", card)]]

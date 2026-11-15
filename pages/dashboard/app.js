@@ -35,7 +35,9 @@
   var TAB_NAMES = TABS.map(function (t) { return t[0]; });
   var STYLE_GROUPS = ["style", "content", "card"], SETTINGS_GROUPS = ["basic", "start"];
   var GROUP_ICON = { basic: "gear", start: "flag", style: "layers", content: "sliders", card: "image" };
-  var OPTION_LABELS = { push_style: { text: "文字模板", card: "卡片图" }, start_from: { deploy: "部署时间", subscribe: "订阅时间", custom: "自定义时间" } };
+  var OPTION_LABELS = { push_style: { text: "文字模板", card: "卡片图" }, card_text: { merge: "合成一条", separate: "分两条发", none: "只发卡片图" }, start_from: { deploy: "部署时间", subscribe: "订阅时间", custom: "自定义时间" } };
+  var STYLE_LABELS = { text: "文字模板", card: "卡片图", card_merge: "文字+卡片图（一条）", card_separate: "文字、卡片图分两条" };
+  function styleLabel(st) { return STYLE_LABELS[st] || "文字模板"; }
   var UNITS = { poll_interval_minutes: "分钟", max_new_posts_per_poll: "篇", max_post_age_hours: "小时", excerpt_max_chars: "字", max_tags: "个", timezone_offset_hours: "小时", card_excerpt_lines: "行", card_title_lines: "行" };
   var RANGES = { poll_interval_minutes: [5, 1440], max_new_posts_per_poll: [1, 20], max_post_age_hours: [0, 8760], excerpt_max_chars: [0, 2000], max_tags: [0, 30], timezone_offset_hours: [-12, 14], card_excerpt_lines: [0, 6], card_title_lines: [1, 4] };
   var MONO = { proxy: 1, start_time: 1, time_format: 1, card_font_path: 1, card_bold_font_path: 1 };
@@ -388,7 +390,7 @@
     var cover = el("div", "fb-cover");
     if (p.cover_url && !adultHidden(p.adult)) { var ci = img(p.cover_url); ci.addEventListener("error", function () { cover.textContent = ""; cover.classList.add("ph"); cover.appendChild(el("span", "", "封面加载失败")); }); cover.appendChild(ci); }
     else { cover.classList.add("ph"); cover.appendChild(el("span", "", p.cover_url ? "R-18 · 封面已隐藏" : (p.fee === undefined ? "旧记录没有封面信息" : "FANBOX"))); }
-    var status = el("span", "fb-status " + (p.ok ? "ok" : "fail")); status.appendChild(iconEl(p.ok ? "check" : "alert")); status.appendChild(el("span", "", (p.test ? (p.ok ? "测试推送到 " : "测试推送失败 · ") : (p.ok ? "已推送到 " : "推送失败 · ")) + sessionLabel(p.umo) + " · " + (p.style === "card" ? "卡片图" : "文字模板")));
+    var status = el("span", "fb-status " + (p.ok ? "ok" : "fail")); status.appendChild(iconEl(p.ok ? "check" : "alert")); status.appendChild(el("span", "", (p.test ? (p.ok ? "测试推送到 " : "测试推送失败 · ") : (p.ok ? "已推送到 " : "推送失败 · ")) + sessionLabel(p.umo) + " · " + styleLabel(p.style)));
     cover.appendChild(status);
     card.appendChild(cover);
     var body = el("div", "fb-body");
@@ -444,7 +446,7 @@
   function updatePushRow(row, p) {
     setIcon(row.ic, p.ok ? "o-push" : "o-fail", p.ok ? "send" : "alert"); row.kind.textContent = (p.test ? "测试" : "") + (p.ok ? "已推送" : "推送失败");
     row.ep.textContent = ""; row.ep.appendChild(el("span", "ttl", p.title || "（无标题）")); if (p.url) row.ep.appendChild(copyBtn(function () { return p.url; }));
-    row.desc.textContent = p.name || p.creator; row.why.textContent = "推送到 " + sessionLabel(p.umo) + " · " + (p.style === "card" ? "卡片图" : "文字模板");
+    row.desc.textContent = p.name || p.creator; row.why.textContent = "推送到 " + sessionLabel(p.umo) + " · " + styleLabel(p.style);
     row.msg.hidden = p.ok; if (!p.ok) { row.msg.className = "err-msg"; row.msg.textContent = p.error || "没有错误说明"; }
     row.meta.textContent = p.creator + " · 帖子 " + p.post_id;
     setPill(row.res, p.ok ? { cls: "pill p-good", icon: "check", text: "已送达" } : { cls: "pill p-bad", icon: "alert", text: "下次重试" }); setTime(row, p.at);
@@ -533,8 +535,15 @@
     Object.keys(controls).forEach(function (id) { var c = controls[id]; c.row.classList.toggle("changed", JSON.stringify(draft[c.g][c.k]) !== JSON.stringify(savedValues[c.g][c.k])); });
     updateStartRows();
   }
-  function setDraft(g, k, v) { draft[g][k] = v; refreshDirty(); if (STYLE_GROUPS.indexOf(g) >= 0) schedulePreview(450); }
+  function setDraft(g, k, v) { draft[g][k] = v; refreshDirty(); if (g === "style") updateStyleRows(); if (STYLE_GROUPS.indexOf(g) >= 0) schedulePreview(450); }
+  function updateStyleRows() {
+    if (!draft.style) return; var card = draft.style.push_style === "card";
+    var ct = controls["style.card_text"]; if (ct) { ct.row.style.opacity = card ? "" : ".55"; if (ct.extra) ct.extra.textContent = !card ? "推送样式是「文字模板」时不起作用" : draft.style.card_text === "merge" ? "一条消息：文字在上，卡片图在下" : draft.style.card_text === "separate" ? "先发文字，再单独发卡片图" : "不发文字，只发卡片图"; }
+    var tc = controls["style.card_template"]; if (tc) tc.row.style.opacity = card && draft.style.card_text !== "none" ? "" : ".55";
+    var mt = controls["style.message_template"]; if (mt) mt.row.style.opacity = card ? ".55" : "";
+  }
   function updateStartRows() {
+    updateStyleRows();
     var c = controls["start.start_time"]; if (!c) return; c.row.style.opacity = draft.start.start_from === "custom" ? "" : ".55";
     var ex = controls["start.start_from"]; if (ex && ex.extra) ex.extra.textContent = draft.start.start_from === "deploy" && data ? ("部署时间：" + data.plugin.deployed_text) : draft.start.start_from === "subscribe" ? "每个订阅各自从订阅那一刻开始" : "按下面填写的时间";
   }
@@ -569,19 +578,19 @@
   }
   function insertAtCursor(ta, text) { var s = ta.selectionStart, e = ta.selectionEnd, v = ta.value; ta.value = v.slice(0, s) + text + v.slice(e); ta.selectionStart = ta.selectionEnd = s + text.length; ta.focus(); ta.dispatchEvent(new Event("input")); }
   function buildTemplateEditor(ctl, g, k) {
-    var tplData = data.template, wrap = el("div", "tpl-one");
-    var ta = el("textarea", "textarea"); ta.spellcheck = false; ta.rows = 9; ta.setAttribute("aria-label", "推送模板");
-    ta.addEventListener("input", function () { draft[g][k] = ta.value === tplData["default"] ? "" : ta.value; refreshDirty(); schedulePreview(600); });
+    var tplData = data.template, isCard = k === "card_template", def = isCard ? tplData.card_default : tplData["default"], wrap = el("div", "tpl-one" + (isCard ? " card-tpl" : ""));
+    var ta = el("textarea", "textarea"); ta.spellcheck = false; ta.rows = isCard ? 5 : 9; ta.setAttribute("aria-label", isCard ? "卡片图配文模板" : "推送模板");
+    ta.addEventListener("input", function () { draft[g][k] = ta.value === def ? "" : ta.value; refreshDirty(); schedulePreview(600); });
     wrap.appendChild(ta);
-    var tools = el("div", "tpl-tools"); tools.appendChild(el("span", "hint", "清空或恢复默认，都使用默认模板；推送样式选「卡片图」时不用模板")); var reset = el("button", "btn sm", "恢复默认模板"); reset.type = "button";
-    reset.addEventListener("click", function () { ta.value = tplData["default"]; draft[g][k] = ""; refreshDirty(); schedulePreview(200); }); tools.appendChild(reset); wrap.appendChild(tools);
+    var tools = el("div", "tpl-tools"); tools.appendChild(el("span", "hint", isCard ? "清空或恢复默认，都使用默认配文；只取文字，图片变量会被忽略" : "清空或恢复默认，都使用默认模板；推送样式选「卡片图」时改用「卡片图配文模板」")); var reset = el("button", "btn sm", isCard ? "恢复默认配文" : "恢复默认模板"); reset.type = "button";
+    reset.addEventListener("click", function () { ta.value = def; draft[g][k] = ""; refreshDirty(); schedulePreview(200); }); tools.appendChild(reset); wrap.appendChild(tools);
     var vars = el("div", "vars"); vars.appendChild(el("h4", "", "文字变量（" + Object.keys(tplData.text_variables).length + " 个，点一下插入到光标处）"));
     var chips = el("div", "chips"); Object.keys(tplData.text_variables).forEach(function (name) { var c = el("button", "chip", "{" + name + "}"); c.type = "button"; c.addEventListener("click", function () { insertAtCursor(ta, "{" + name + "}"); }); bindTip(c, function () { return ["{" + name + "}", tplData.text_variables[name]]; }); chips.appendChild(c); }); vars.appendChild(chips);
-    vars.appendChild(el("h4", "", "图片变量（写在哪儿，图片就出现在哪儿）"));
-    var ichips = el("div", "chips"); Object.keys(tplData.image_variables).forEach(function (name) { var c = el("button", "chip img", "{" + name + "}"); c.type = "button"; c.addEventListener("click", function () { insertAtCursor(ta, "{" + name + "}"); }); bindTip(c, function () { return ["{" + name + "}", tplData.image_variables[name]]; }); ichips.appendChild(c); }); vars.appendChild(ichips);
+    if (!isCard) { vars.appendChild(el("h4", "", "图片变量（写在哪儿，图片就出现在哪儿）"));
+    var ichips = el("div", "chips"); Object.keys(tplData.image_variables).forEach(function (name) { var c = el("button", "chip img", "{" + name + "}"); c.type = "button"; c.addEventListener("click", function () { insertAtCursor(ta, "{" + name + "}"); }); bindTip(c, function () { return ["{" + name + "}", tplData.image_variables[name]]; }); ichips.appendChild(c); }); vars.appendChild(ichips); }
     var rules = el("ul", "rules"); [["{{ 和 }}", " 表示花括号本身"], ["", "一行里的变量全为空、这一行又没有其他文字时，整行自动删掉"], ["?", " 开头的行：只要行里有一个变量为空，整行就删掉"], ["", "不认识的 {xxx} 原样显示"]].forEach(function (r) { var li = el("li", ""); if (r[0]) li.appendChild(el("code", "", r[0])); li.appendChild(document.createTextNode(r[1])); rules.appendChild(li); }); vars.appendChild(rules);
     wrap.appendChild(vars); ctl.appendChild(wrap);
-    return function (v) { if (document.activeElement !== ta) ta.value = v ? v : tplData["default"]; };
+    return function (v) { if (document.activeElement !== ta) ta.value = v ? v : def; };
   }
   function groupCard(id, title, hint, icon, rows, delay) {
     var card = later(el("section", "card set-group rv enter"), delay); card.id = id; card.setAttribute("data-chapter", title);
@@ -592,9 +601,10 @@
     var schema = data.settings.schema; controls = {};
     var sf = $("styleForms"), gf = $("settingsForms"); sf.textContent = ""; gf.textContent = "";
     var items = schema.style.items, d = firstRender ? 80 : 0;
-    var styleRows = ["push_style", "send_cover", "send_adult_cover"].filter(function (k) { return items[k]; }).map(function (k) { return buildControl("style", k, items[k]); });
-    sf.appendChild(groupCard("ch-style", "推送样式", "发文字模板还是卡片图，以及要不要附封面。改动后预览会自动更新。", "layers", styleRows, d));
+    var styleRows = ["push_style", "card_text", "send_cover", "send_adult_cover"].filter(function (k) { return items[k]; }).map(function (k) { return buildControl("style", k, items[k]); });
+    sf.appendChild(groupCard("ch-style", "推送样式", "发文字模板还是卡片图、卡片图怎么配文字，以及要不要附封面。改动后预览会自动更新。", "layers", styleRows, d));
     if (items.message_template) sf.appendChild(groupCard("ch-template", "推送模板", "推送样式为「文字模板」时使用。点下面的变量插入到光标处。", "text", [buildControl("style", "message_template", items.message_template)], d + 60));
+    if (items.card_template) sf.appendChild(groupCard("ch-card-text", "卡片图配文", "推送样式为「卡片图」时，配在卡片图上面的文字。和卡片图合成一条还是分两条发，在上面的「卡片图配文」里选。", "text", [buildControl("style", "card_template", items.card_template)], d + 90));
     ["content", "card"].forEach(function (g, i) { var body = schema[g]; if (!body) return; sf.appendChild(groupCard("ch-" + g, body.description || g, body.hint || "", GROUP_ICON[g], Object.keys(body.items).map(function (k) { return buildControl(g, k, body.items[k]); }), d + 120 + i * 60)); });
     SETTINGS_GROUPS.forEach(function (g, i) { var body = schema[g]; if (!body) return; gf.appendChild(groupCard("ch-" + g, body.description || g, body.hint || "", GROUP_ICON[g], Object.keys(body.items).map(function (k) { return buildControl(g, k, body.items[k]); }), d + i * 60)); });
     settingsBuilt = true;
@@ -617,7 +627,7 @@
       load();
     }).catch(function (e) { toast("没有保存：" + errMsg(e)); }).then(function () { busy(btn, false); });
   }
-  function discardSettings() { draft = clone(savedValues); Object.keys(controls).forEach(function (id) { var c = controls[id]; c.set(draft[c.g][c.k]); }); refreshDirty(); schedulePreview(200); toast("已撤销未保存的修改", true); }
+  function discardSettings() { draft = clone(savedValues); Object.keys(controls).forEach(function (id) { var c = controls[id]; c.set(draft[c.g][c.k]); }); refreshDirty(); updateStartRows(); schedulePreview(200); toast("已撤销未保存的修改", true); }
 
   /* =================== 实时预览（推送样式 / 推送模板） =================== */
   var pv = { seq: 0, timer: 0, ran: false };
@@ -647,14 +657,18 @@
       var body = $("pvBody"); body.textContent = "";
       var post = res.post || {}, ph = $("pvPost"); ph.textContent = "";
       var line = el("div", "pv-post-line"); line.appendChild(el("b", "", post.creator_name || res.creator)); line.appendChild(el("span", "", (res.source === "post" ? "指定帖子" : "最新一篇") + " · 《" + (post.title || "") + "》")); if (post.url) line.appendChild(copyBtn(function () { return post.url; })); ph.appendChild(line);
-      res.pieces.forEach(function (p, i) {
-        var b;
-        if (p.type === "text") b = el("div", "bubble", p.text);
-        else { b = el("div", "bubble img"); var im = document.createElement("img"); im.alt = "预览图片"; im.src = p.src; b.appendChild(im); }
-        body.appendChild(b); fx(b, [{ opacity: 0, transform: "translateY(6px)", offset: 0 }], { duration: 420, delay: i * 50, easing: EASE, fill: "backwards" });
+      var msgs = res.messages || [res.pieces];
+      msgs.forEach(function (m, i) {
+        var onlyImg = m.length === 1 && m[0].type === "image", b = el("div", "bubble" + (onlyImg ? " img" : " mixed"));
+        m.forEach(function (p) {
+          if (p.type === "text") { var tx = p.text.replace(/\n+$/, ""); if (tx) b.appendChild(el("div", "b-text", tx)); }
+          else { var im = document.createElement("img"); im.alt = "预览图片"; im.src = p.src; b.appendChild(im); }
+        });
+        body.appendChild(b); fx(b, [{ opacity: 0, transform: "translateY(6px)", offset: 0 }], { duration: 420, delay: i * 60, easing: EASE, fill: "backwards" });
       });
-      var imgs = res.pieces.filter(function (p) { return p.type === "image"; }), dirty = countDirty();
-      body.appendChild(el("div", "preview-meta", (res.style === "card" ? "卡片图" : "文字模板") + " · " + res.pieces.length + " 段" + (imgs.length ? "（" + imgs.length + " 张图，共 " + Math.round(imgs.reduce(function (s, p) { return s + p.bytes; }, 0) / 1024) + " KB）" : "") + " · 取帖 " + (res.fetch_ms || 0) + " ms · 生成 " + res.ms + " ms" + (dirty ? " · 含 " + dirty + " 项未保存的修改" : "")));
+      var all = res.pieces || [], imgs = all.filter(function (p) { return p.type === "image"; }), dirty = countDirty();
+      var styleName = res.style === "card" ? styleLabel(res.card_text && res.card_text !== "none" ? "card_" + res.card_text : "card") : "文字模板";
+      body.appendChild(el("div", "preview-meta", styleName + " · " + msgs.length + " 条消息" + (imgs.length ? "（" + imgs.length + " 张图，共 " + Math.round(imgs.reduce(function (s, p) { return s + p.bytes; }, 0) / 1024) + " KB）" : "") + " · 取帖 " + (res.fetch_ms || 0) + " ms · 生成 " + res.ms + " ms" + (dirty ? " · 含 " + dirty + " 项未保存的修改" : "")));
       setPvState("ok", "已按当前样式更新"); measureSoon();
     }).catch(function (e) {
       if (seq !== pv.seq) return;
