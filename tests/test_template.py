@@ -11,8 +11,8 @@ from fanbox_core import (
     build_variables,
     parse_post,
     card_messages,
+    ensure_card_element,
     render_template,
-    render_text_only,
     unknown_variables,
 )
 
@@ -166,36 +166,74 @@ def test_schema_template_and_readme_cover_every_variable():
             assert "type" in item and "default" in item
 
 
-def test_card_template_default_is_short_and_valid():
+def card_msgs(template, mode="merge", card=b"JPEG"):
+    pieces = render_template(template, build_variables(make_post()))
+    return card_messages(pieces, card, mode)
+
+
+def test_card_template_default_has_card_element_between_title_and_link():
     assert unknown_variables(DEFAULT_CARD_TEMPLATE) == []
-    text = render_text_only(DEFAULT_CARD_TEMPLATE, build_variables(make_post()))
-    assert text.splitlines()[1] == "《テスト》"
-    assert text.endswith("https://creator-a.fanbox.cc/posts/100")
+    assert DEFAULT_CARD_TEMPLATE.count("{card_image}") == 1
     schema = json.loads((ROOT / "_conf_schema.json").read_text("utf-8"))
     items = schema["style"]["items"]
     assert items["card_template"]["default"] == DEFAULT_CARD_TEMPLATE
     assert items["card_template"]["type"] == "text"
     assert items["card_text"]["default"] == "merge"
     assert sorted(items["card_text"]["options"]) == sorted(CARD_TEXT_MODES)
+    # 默认：标题在卡片图上方、链接在卡片图下方，同一条消息
+    [message] = card_msgs(DEFAULT_CARD_TEMPLATE)
+    assert [k for k, _ in message] == ["text", "image", "text"]
+    assert message[0][1].endswith("《テスト》\n")
+    assert message[2][1] == "\nhttps://creator-a.fanbox.cc/posts/100"
 
 
-def test_render_text_only_ignores_images():
-    tpl = "{card_image}\n《{title}》 {cover_image}\n{avatar_image}\n{post_url}"
-    text = render_text_only(tpl, build_variables(make_post()))
-    assert text == "《テスト》\nhttps://creator-a.fanbox.cc/posts/100"
+def test_ensure_card_element():
+    assert ensure_card_element("") == ""  # 空 = 默认模板
+    assert ensure_card_element("{title}\n{card_image}") == "{title}\n{card_image}"
+    # 旧版（v0.6.0）没有卡片图元素：补在末尾，卡片图仍在文字下方
+    assert (
+        ensure_card_element("{creator_name}\n发布了新的FANBOX文章：\n\n")
+        == "{creator_name}\n发布了新的FANBOX文章：\n{card_image}"
+    )
+    # 多了只留第一个
+    assert (
+        ensure_card_element("{card_image}\n{title}{card_image}")
+        == "{card_image}\n{title}"
+    )
 
 
 def test_card_messages_modes():
+    tpl = "上：{title}\n{card_image}\n下：{post_url}"
     card = b"JPEG"
-    # 合成一条：文字在上、卡片图在下，同一条消息
-    assert card_messages(card, "标题\n链接", "merge") == [
-        [("text", "标题\n链接\n"), ("image", card)]
+    # 合成一条：上方文字 + 卡片图 + 下方文字，交界处补换行
+    assert card_msgs(tpl, "merge") == [
+        [
+            ("text", "上：テスト\n"),
+            ("image", card),
+            ("text", "\n下：https://creator-a.fanbox.cc/posts/100"),
+        ]
     ]
-    # 分两条：先文字，再卡片图
-    assert card_messages(card, "标题", "separate") == [
-        [("text", "标题")],
+    # 拆开：上方文字、卡片图、下方文字各一条
+    assert card_msgs(tpl, "separate") == [
+        [("text", "上：テスト")],
         [("image", card)],
+        [("text", "下：https://creator-a.fanbox.cc/posts/100")],
     ]
-    # 只发卡片图；配文为空时也只发卡片图
-    assert card_messages(card, "标题", "none") == [[("image", card)]]
-    assert card_messages(card, "\n \n", "merge") == [[("image", card)]]
+    # 只发卡片图
+    assert card_msgs(tpl, "none") == [[("image", card)]]
+    # 卡片图在最上面 / 最下面
+    assert [k for k, _ in card_msgs("{card_image}\n{post_url}")[0]] == ["image", "text"]
+    assert [k for k, _ in card_msgs("{title}\n{card_image}")[0]] == ["text", "image"]
+    assert card_msgs("{card_image}", "separate") == [[("image", card)]]
+
+
+def test_card_messages_ignores_other_images_and_keeps_card():
+    # 其他图片变量忽略，行尾空格去掉
+    [message] = card_msgs(
+        "《{title}》 {cover_image}\n{card_image}\n{avatar_image}{post_url}"
+    )
+    assert message[0] == ("text", "《テスト》\n")
+    assert message[2] == ("text", "\nhttps://creator-a.fanbox.cc/posts/100")
+    # {card_image} 所在的条件行被删掉时，卡片图放在最后
+    [message] = card_msgs("{title}\n?{card_image}{excerpt}")
+    assert message == [("text", "テスト\n"), ("image", b"JPEG")]

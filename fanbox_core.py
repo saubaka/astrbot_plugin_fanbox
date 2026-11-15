@@ -345,9 +345,13 @@ DEFAULT_TEMPLATE = """【FANBOX】{creator_name} {headline}
 {post_url}
 {cover_image}"""
 
-# 推送样式为“卡片图”时，配在卡片图上面的文字。卡片图里已经有封面、摘要和标签，这里只放标题和链接。
+# 推送样式为“卡片图”时的消息模板。{card_image} 是卡片图本身，必须保留且只能有一个：
+# 写在它上面的文字在卡片图上方，写在它下面的文字在卡片图下方。卡片图里已经有封面、摘要和标签，
+# 所以默认只在上面放标题、在下面放链接。
+CARD_ELEMENT = "{card_image}"
 DEFAULT_CARD_TEMPLATE = """【FANBOX】{creator_name} {headline}
 《{title}》
+{card_image}
 {post_url}"""
 
 # 卡片图配文的发法：只发卡片图 / 文字和卡片图合成一条消息 / 文字和卡片图分两条发
@@ -531,27 +535,64 @@ def render_template(template: str, values: dict[str, str]) -> list[tuple[str, st
     return out
 
 
-def render_text_only(template: str, values: dict[str, str]) -> str:
-    """只取模板渲染结果里的文字（卡片图配文用）：图片变量忽略，各段文字按行拼起来。"""
-    texts = [v for k, v in render_template(template, values) if k == "text"]
-    # 去掉图片变量后，行尾可能留下空格
+def ensure_card_element(template: str) -> str:
+    """卡片图配文模板里必须有且只有一个 {card_image}：没有就补在末尾，多了只留第一个。空字符串表示默认模板，原样返回。"""
+    if not template:
+        return template
+    count = template.count(CARD_ELEMENT)
+    if count == 1:
+        return template
+    if count == 0:
+        return template.rstrip() + "\n" + CARD_ELEMENT
+    first = template.index(CARD_ELEMENT) + len(CARD_ELEMENT)
+    return template[:first] + template[first:].replace(CARD_ELEMENT, "")
+
+
+def _join_text(texts: list[str]) -> str:
+    """把几段文字按行拼起来，去掉行尾空格和首尾空行。"""
     lines = [line.rstrip() for line in "\n".join(texts).split("\n")]
     return "\n".join(lines).strip("\n")
 
 
-def card_messages(card: Any, text: str, mode: str) -> list[list[tuple[str, Any]]]:
+def card_messages(
+    pieces: list[tuple[str, str]], card: Any, mode: str
+) -> list[list[tuple[str, Any]]]:
     """卡片图样式要发的消息：每条消息是一组 ("text", 文字) / ("image", 卡片图) 片段。
 
-    - merge：文字和卡片图合成一条，文字在上、卡片图在下（文字末尾补一个换行，让图片另起一行）
-    - separate：先发文字，再单独发卡片图
-    - none，或配文渲染出来是空的：只发卡片图
+    pieces 是卡片图配文模板渲染出来的片段（render_template 的结果）：{card_image} 之前的文字
+    放在卡片图上方，之后的文字放在卡片图下方；其他图片变量忽略（卡片图里已经有封面和头像）。
+    模板里的 {card_image} 被条件行删掉时，卡片图放在最后。
+
+    - merge：一条消息，上方文字 + 卡片图 + 下方文字（交界处补换行，让卡片图单独占一行）
+    - separate：按卡片图切开，上方文字、卡片图、下方文字各发一条
+    - none：只发卡片图
     """
-    text = (text or "").strip("\n")
-    if mode == "none" or not text.strip():
+    if mode == "none":
         return [[("image", card)]]
+    above: list[str] = []
+    below: list[str] = []
+    seen = False
+    for kind, value in pieces:
+        if kind == "image":
+            seen = seen or value == "card_image"
+            continue
+        (below if seen else above).append(value)
+    top, bottom = _join_text(above), _join_text(below)
     if mode == "separate":
-        return [[("text", text)], [("image", card)]]
-    return [[("text", text + "\n"), ("image", card)]]
+        messages: list[list[tuple[str, Any]]] = []
+        if top.strip():
+            messages.append([("text", top)])
+        messages.append([("image", card)])
+        if bottom.strip():
+            messages.append([("text", bottom)])
+        return messages
+    message: list[tuple[str, Any]] = []
+    if top.strip():
+        message.append(("text", top + "\n"))
+    message.append(("image", card))
+    if bottom.strip():
+        message.append(("text", "\n" + bottom))
+    return [message]
 
 
 def format_post_text(
