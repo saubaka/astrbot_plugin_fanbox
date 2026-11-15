@@ -1,0 +1,181 @@
+{
+  "basic": {
+    "description": "基础设置",
+    "type": "object",
+    "hint": "轮询频率和网络。",
+    "items": {
+      "poll_interval_minutes": {
+        "description": "轮询间隔（分钟）",
+        "type": "int",
+        "default": 10,
+        "hint": "最小 5 分钟。每次轮询，每个创作者只请求一次公开帖子列表。"
+      },
+      "max_new_posts_per_poll": {
+        "description": "每个创作者每次最多推送几篇",
+        "type": "int",
+        "default": 3,
+        "hint": "超出时只推送最新的几篇，避免刷屏。"
+      },
+      "proxy": {
+        "description": "代理地址（留空则不使用代理）",
+        "type": "string",
+        "default": "",
+        "hint": "例如 http://127.0.0.1:7890。只用于访问 FANBOX 和下载图片。"
+      }
+    }
+  },
+  "start": {
+    "description": "推送起点",
+    "type": "object",
+    "hint": "决定从什么时候发布的帖子开始推送。默认从插件部署时间开始，不会推送更早的帖子。",
+    "items": {
+      "start_from": {
+        "description": "推送起点",
+        "type": "string",
+        "default": "deploy",
+        "options": [
+          "deploy",
+          "subscribe",
+          "custom"
+        ],
+        "hint": "deploy = 插件第一次启动的时间（默认）；subscribe = 每个订阅各自的订阅时间；custom = 下面填写的自定义时间。早于起点发布的帖子一律不推送，推送过的也不会重复。"
+      },
+      "start_time": {
+        "description": "自定义起点时间",
+        "type": "string",
+        "default": "",
+        "hint": "推送起点选 custom 时生效。例如 2026-11-15 08:00，按“显示内容 → 时区”理解；填不对时改用部署时间，日志里会提示。"
+      },
+      "max_post_age_hours": {
+        "description": "不推送发布超过几小时的帖子",
+        "type": "int",
+        "default": 0,
+        "hint": "0 = 不限制。比如填 24：机器人停了很久再恢复时，不会补推一天前的旧帖。"
+      }
+    }
+  },
+  "style": {
+    "description": "推送样式",
+    "type": "object",
+    "hint": "选择发文字还是卡片图，以及文字消息的模板。",
+    "items": {
+      "push_style": {
+        "description": "推送样式",
+        "type": "string",
+        "default": "text",
+        "options": [
+          "text",
+          "card"
+        ],
+        "hint": "text = 按下面的“推送模板”发消息（模板里也可以插入图片，包括 {card_image} 卡片图）；card = 只发一张仿 FANBOX 网页样式的卡片图（渲染失败时自动改发文字模板）。"
+      },
+      "message_template": {
+        "description": "推送模板",
+        "type": "text",
+        "default": "【FANBOX】{creator_name} {headline}\n《{title}》\n{labels}\n{excerpt}\n{tags}\n?发布时间：{published}\n{post_url}\n{cover_image}",
+        "hint": "常用变量：{creator_name} 昵称、{title} 标题、{labels} 档位、{excerpt} 摘要、{tags} 标签、{published} 发布时间、{post_url} 链接、{cover_image} 封面图、{card_image} 卡片图。全部 33 个变量和写法规则见插件 README，也可以在 QQ 里发 /fanbox变量 查看。清空即恢复默认模板。"
+      },
+      "send_cover": {
+        "description": "附带封面图",
+        "type": "bool",
+        "default": true,
+        "hint": "控制模板里的 {cover_image}。封面是 FANBOX 公开展示的图片，付费帖也有。卡片图不受此项影响。"
+      },
+      "send_adult_cover": {
+        "description": "R-18 帖子也附带封面图",
+        "type": "bool",
+        "default": false,
+        "hint": "默认关闭：R-18 帖子不发封面，卡片图里的封面换成“R-18 · 封面已隐藏”，避免在 QQ 群里发出成人图片。"
+      }
+    }
+  },
+  "content": {
+    "description": "显示内容",
+    "type": "object",
+    "hint": "同时作用于文字模板和卡片图。",
+    "items": {
+      "show_fee": {
+        "description": "显示付费档位",
+        "type": "bool",
+        "default": true,
+        "hint": "关闭后 {fee_text}、{fee_badge}、{labels} 里的档位为空，卡片图右上角不显示档位标签。"
+      },
+      "show_timezone": {
+        "description": "显示时区",
+        "type": "bool",
+        "default": true,
+        "hint": "开启时 {published}、{updated} 和卡片日期后面带“（北京时间）”这样的时区名。"
+      },
+      "show_tags": {
+        "description": "显示标签",
+        "type": "bool",
+        "default": true,
+        "hint": "关闭后 {tags}、{tags_plain} 为空。"
+      },
+      "show_adult_mark": {
+        "description": "显示 R-18 标记",
+        "type": "bool",
+        "default": true,
+        "hint": "关闭后 {adult} 为空，卡片图不显示 R-18 标签。"
+      },
+      "excerpt_max_chars": {
+        "description": "摘要最多显示多少字",
+        "type": "int",
+        "default": 120,
+        "hint": "作用于 {excerpt}，填 0 不显示。付费帖未登录时摘要通常为空。"
+      },
+      "max_tags": {
+        "description": "最多显示几个标签",
+        "type": "int",
+        "default": 6,
+        "hint": "作用于 {tags}、{tags_plain}、{tag_count}。"
+      },
+      "time_format": {
+        "description": "时间格式",
+        "type": "string",
+        "default": "%Y-%m-%d %H:%M",
+        "hint": "Python strftime 格式，作用于 {published}、{updated}。例如 %m月%d日 %H:%M。卡片图固定用“2026年11月14日 01:12”的写法。"
+      },
+      "timezone_offset_hours": {
+        "description": "时区（相对 UTC 的小时数）",
+        "type": "int",
+        "default": 8,
+        "hint": "8 = 北京时间，9 = 日本时间，13 = 新西兰夏令时。"
+      }
+    }
+  },
+  "card": {
+    "description": "卡片图",
+    "type": "object",
+    "hint": "推送样式为 card，或模板里用了 {card_image} 时生效。",
+    "items": {
+      "card_show_likes": {
+        "description": "卡片显示点赞数",
+        "type": "bool",
+        "default": true
+      },
+      "card_excerpt_lines": {
+        "description": "卡片摘要最多几行",
+        "type": "int",
+        "default": 2,
+        "hint": "超出部分用“…”省略，填 0 不显示摘要。"
+      },
+      "card_title_lines": {
+        "description": "卡片标题最多几行",
+        "type": "int",
+        "default": 2
+      },
+      "card_font_path": {
+        "description": "卡片常规字体文件（留空自动使用 Noto Sans CJK）",
+        "type": "string",
+        "default": "",
+        "hint": "容器里的字体路径，.ttf/.otf/.ttc 都可以。"
+      },
+      "card_bold_font_path": {
+        "description": "卡片粗体字体文件（留空自动使用 Noto Sans CJK Bold）",
+        "type": "string",
+        "default": ""
+      }
+    }
+  }
+}
