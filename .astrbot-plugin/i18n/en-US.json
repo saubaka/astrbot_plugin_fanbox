@@ -1,0 +1,8 @@
+{
+  "pages": {
+    "dashboard": {
+      "title": "FANBOX Dashboard",
+      "description": "Push stats, creator status, subscriptions and all settings"
+    }
+  }
+}

@@ -160,20 +160,3 @@ def test_schema_template_and_readme_cover_every_variable():
         assert section["type"] == "object"
         for item in section["items"].values():
             assert "type" in item and "default" in item
-
-
-def test_config_sections_match_schema():
-    import ast
-
-    src = (ROOT / "main.py").read_text("utf-8")
-    tree = ast.parse(src)
-    mapping = None
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Assign)
-            and getattr(node.targets[0], "id", "") == "CONFIG_SECTIONS"
-        ):
-            mapping = ast.literal_eval(node.value)
-    schema = json.loads((ROOT / "_conf_schema.json").read_text("utf-8"))
-    from_schema = {k: sec for sec, body in schema.items() for k in body["items"]}
-    assert mapping == from_schema

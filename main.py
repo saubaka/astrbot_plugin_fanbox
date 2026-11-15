@@ -1,7 +1,7 @@
 """
 AstrBot FANBOX 新帖推送插件
 
-订阅 pixivFANBOX 创作者，有新帖时把标题、档位、摘要、封面和链接推到订阅的会话。
+订阅 pixivFANBOX 创作者，有新帖时推送到订阅的会话。
 只读取 FANBOX 公开的帖子列表，不登录，也不转发付费内容。
 """
 
@@ -20,147 +20,92 @@ from astrbot.api.star import Context, Star
 from .fanbox_api import FanboxAPI, FanboxBlocked, FanboxError, FanboxNotFound
 from .fanbox_card import CardOptions, render_card
 from .fanbox_core import (
-    DEFAULT_TEMPLATE,
     IMAGE_VARIABLES,
     START_MODE_LABELS,
-    START_MODES,
     TEXT_VARIABLES,
     Post,
-    StyleOptions,
     advance_state,
     build_variables,
     format_ts,
     initial_state,
     parse_creator_id,
     parse_posts,
-    parse_start_time,
     render_template,
     select_new_posts,
     start_floor,
     subscribed_at,
-    unknown_variables,
 )
+from .fanbox_settings import (
+    Settings,
+    build_settings,
+    current_values,
+    load_schema,
+    validate,
+)
+from .fanbox_stats import Stats
 
+try:
+    from .fanbox_webui import FanboxWebUI
+except ModuleNotFoundError as exc:  # 旧版 AstrBot 没有 astrbot.api.web
+    if exc.name != "astrbot.api.web":
+        raise
+    FanboxWebUI = None
+
+PLUGIN_NAME = "astrbot_plugin_fanbox"
 KV_SUBSCRIPTIONS = "fanbox_subscriptions_v1"
 KV_DEPLOYED_AT = "fanbox_deployed_at"
+KV_STATS = "fanbox_stats_v1"
 LIST_LIMIT = 10
-PUSH_STYLES = {"text", "card"}
 
-# 每个配置项所在的分组；也兼容 v0.1.0 的扁平配置
-CONFIG_SECTIONS = {
-    "poll_interval_minutes": "basic",
-    "max_new_posts_per_poll": "basic",
-    "proxy": "basic",
-    "start_from": "start",
-    "start_time": "start",
-    "max_post_age_hours": "start",
-    "push_style": "style",
-    "message_template": "style",
-    "send_cover": "style",
-    "send_adult_cover": "style",
-    "show_fee": "content",
-    "show_timezone": "content",
-    "show_tags": "content",
-    "show_adult_mark": "content",
-    "excerpt_max_chars": "content",
-    "max_tags": "content",
-    "time_format": "content",
-    "timezone_offset_hours": "content",
-    "card_show_likes": "card",
-    "card_excerpt_lines": "card",
-    "card_title_lines": "card",
-    "card_font_path": "card",
-    "card_bold_font_path": "card",
-}
+Piece = tuple[str, Any]  # ("text", str) 或 ("image", bytes)
 
 
-class _Config:
-    def __init__(self, config: Any):
-        self._config = config if config is not None else {}
-
-    def get(self, key: str, default: Any) -> Any:
-        section = self._config.get(CONFIG_SECTIONS.get(key, ""), None)
-        if isinstance(section, dict) and key in section:
-            return section[key]
-        return self._config.get(key, default)
-
-    def int(self, key: str, default: int, minimum: int | None = None) -> int:
-        try:
-            value = int(self.get(key, default))
-        except (TypeError, ValueError):
-            value = default
-        return value if minimum is None else max(minimum, value)
-
-    def bool(self, key: str, default: bool) -> bool:
-        value = self.get(key, default)
-        if isinstance(value, str):
-            return value.strip().lower() in {"1", "true", "yes", "on"}
-        return bool(value)
-
-    def str(self, key: str, default: str) -> str:
-        value = self.get(key, default)
-        return default if value is None else str(value)
+def _post_brief(post: Post) -> dict[str, Any]:
+    return {
+        "id": post.id,
+        "title": post.title,
+        "published": post.published,
+        "fee": post.fee,
+        "adult": post.adult,
+        "url": post.url,
+        "cover_url": post.cover_url,
+        "like_count": post.like_count,
+        "comment_count": post.comment_count,
+    }
 
 
 class FanboxPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
-        cfg = _Config(config)
-        self.poll_interval = cfg.int("poll_interval_minutes", 10, 5)
-        self.max_new_per_poll = cfg.int("max_new_posts_per_poll", 3, 1)
-        self.api = FanboxAPI(proxy=cfg.str("proxy", "").strip())
+        self.schema = load_schema()
+        self.s, warnings = build_settings(current_values(config, self.schema))
+        self.settings_warnings = warnings
+        for w in warnings:
+            logger.warning(f"[FANBOX] {w}")
+        self.api = FanboxAPI(proxy=self.s.proxy)
+        self.stats = Stats()
 
-        self.push_style = cfg.str("push_style", "text").strip().lower()
-        if self.push_style not in PUSH_STYLES:
-            logger.warning(f"[FANBOX] 未知的推送样式 {self.push_style!r}，改用 text")
-            self.push_style = "text"
-        self.template = cfg.str("message_template", "") or DEFAULT_TEMPLATE
-        bad = unknown_variables(self.template)
-        if bad:
-            logger.warning(
-                "[FANBOX] 推送模板里有不认识的变量，会原样显示: "
-                + "、".join("{" + b + "}" for b in bad)
-            )
-        self.send_cover = cfg.bool("send_cover", True)
-        self.send_adult_cover = cfg.bool("send_adult_cover", False)
-
-        self.style = StyleOptions(
-            excerpt_max=cfg.int("excerpt_max_chars", 120, 0),
-            offset_hours=cfg.int("timezone_offset_hours", 8),
-            show_fee=cfg.bool("show_fee", True),
-            show_timezone=cfg.bool("show_timezone", True),
-            show_tags=cfg.bool("show_tags", True),
-            show_adult_mark=cfg.bool("show_adult_mark", True),
-            time_format=cfg.str("time_format", "%Y-%m-%d %H:%M") or "%Y-%m-%d %H:%M",
-            max_tags=cfg.int("max_tags", 6, 0),
-        )
-        self.card_show_likes = cfg.bool("card_show_likes", True)
-        self.card_excerpt_lines = cfg.int("card_excerpt_lines", 2, 0)
-        self.card_title_lines = cfg.int("card_title_lines", 2, 1)
-        self.card_font_path = cfg.str("card_font_path", "").strip()
-        self.card_bold_font_path = cfg.str("card_bold_font_path", "").strip()
-
-        self.start_from = cfg.str("start_from", "deploy").strip().lower()
-        if self.start_from not in START_MODES:
-            logger.warning(f"[FANBOX] 未知的推送起点 {self.start_from!r}，改用 deploy")
-            self.start_from = "deploy"
-        start_time_text = cfg.str("start_time", "").strip()
-        self.custom_start_ts = parse_start_time(
-            start_time_text, self.style.offset_hours
-        )
-        if self.start_from == "custom" and self.custom_start_ts is None:
-            logger.warning(
-                f"[FANBOX] 自定义起点时间 {start_time_text!r} 无法解析，"
-                "改用插件部署时间作为起点"
-            )
-        self.max_post_age_hours = cfg.int("max_post_age_hours", 0, 0)
         # 真正的部署时间在 initialize() 里从 KV 读取（第一次启动时写入）
         self.deployed_at = time.time()
+        self.last_poll_at = 0.0
+        self.next_poll_at = 0.0
+        self.last_poll_sent = 0
 
         self._lock = asyncio.Lock()
+        self._config_lock = asyncio.Lock()
+        self._reschedule = asyncio.Event()
         self._running = False
         self._task: asyncio.Task | None = None
+
+        self._webui = None
+        if FanboxWebUI is not None and callable(
+            getattr(context, "register_web_api", None)
+        ):
+            try:
+                self._webui = FanboxWebUI(self, context)
+            except Exception as exc:
+                logger.warning(f"[FANBOX] 插件页接口注册失败: {exc}")
 
     # ---------- 生命周期 ----------
 
@@ -176,82 +121,252 @@ class FanboxPlugin(Star):
             await self.put_kv_data(KV_DEPLOYED_AT, self.deployed_at)
             logger.info(
                 "[FANBOX] 首次启动，记下部署时间 "
-                f"{format_ts(self.deployed_at, self.style.offset_hours)}"
+                f"{format_ts(self.deployed_at, self.s.style.offset_hours)}"
             )
+        try:
+            self.stats = Stats(await self.get_kv_data(KV_STATS, {}))
+        except Exception as exc:
+            logger.warning(f"[FANBOX] 读取统计数据失败，从零开始: {exc}")
+            self.stats = Stats()
+
         self._running = True
+        # 第一次检查放在 30~90 秒后：等平台适配器连上，也和其他插件错开
+        self.last_poll_at = (
+            time.time() - self.s.poll_interval * 60 + random.uniform(30, 90)
+        )
         self._task = asyncio.create_task(self._poll_loop())
         logger.info(
-            f"[FANBOX] 插件已启动，轮询间隔 {self.poll_interval} 分钟，"
-            f"推送样式 {self.push_style}，推送起点 {self._describe_floor()}"
+            f"[FANBOX] 插件已启动，轮询间隔 {self.s.poll_interval} 分钟，"
+            f"推送样式 {self.s.push_style}，推送起点 {self.describe_floor()}"
         )
-
-    def _floor(self, state: dict[str, Any]) -> float:
-        return start_floor(
-            self.start_from,
-            deployed_at=self.deployed_at,
-            subscribed=subscribed_at(state),
-            custom_ts=self.custom_start_ts,
-        )
-
-    def _describe_floor(self, state: dict[str, Any] | None = None) -> str:
-        mode = self.start_from
-        if mode == "custom" and self.custom_start_ts is None:
-            mode = "deploy"
-        label = START_MODE_LABELS[mode]
-        if mode == "subscribe" and state is None:
-            return label
-        floor = self._floor(state or {})
-        return f"{label} {format_ts(floor, self.style.offset_hours)}"
 
     async def terminate(self):
         self._running = False
+        self._reschedule.set()
         if self._task:
             self._task.cancel()
             try:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        await self._save_stats()
         await self.api.close()
         logger.info("[FANBOX] 插件已停止")
 
+    # ---------- 设置 ----------
+
+    def setting_values(self) -> dict[str, dict[str, Any]]:
+        return current_values(self.config, self.schema)
+
+    async def save_settings(self, patch: Any) -> tuple[bool, list[str], list[str]]:
+        """校验并保存设置，立即生效。返回 (是否保存, 错误, 提示)。"""
+        async with self._config_lock:
+            merged, errors = validate(patch, self.schema, self.setting_values())
+            if errors:
+                return False, errors, []
+            previous = {g: dict(v) for g, v in self.setting_values().items()}
+            for group, values in merged.items():
+                section = self.config.get(group)
+                if not isinstance(section, dict):
+                    section = {}
+                    self.config[group] = section
+                section.update(values)
+            try:
+                result = self.config.save_config()
+                if asyncio.iscoroutine(result):
+                    await result
+            except Exception as exc:
+                for group, values in previous.items():
+                    self.config[group] = values
+                logger.error(f"[FANBOX] 保存设置失败: {exc}")
+                return False, ["保存失败，原设置已恢复"], []
+
+            old = self.s
+            self.s, warnings = build_settings(merged)
+            self.settings_warnings = warnings
+            if self.s.proxy != old.proxy:
+                old_api, self.api = self.api, FanboxAPI(proxy=self.s.proxy)
+                await old_api.close()
+            if self.s.poll_interval != old.poll_interval:
+                self._reschedule.set()
+            logger.info("[FANBOX] 设置已从插件页保存并生效")
+            return True, [], warnings
+
+    def preview_settings(self, patch: Any) -> tuple[Settings | None, list[str]]:
+        """用页面上还没保存的设置生成一份临时 Settings，只给预览用。"""
+        merged, errors = validate(patch or {}, self.schema, self.setting_values())
+        if errors:
+            return None, errors
+        s, _ = build_settings(merged)
+        return s, []
+
+    # ---------- 推送起点 ----------
+
+    def floor(self, state: dict[str, Any], s: Settings | None = None) -> float:
+        s = s or self.s
+        return start_floor(
+            s.start_from,
+            deployed_at=self.deployed_at,
+            subscribed=subscribed_at(state),
+            custom_ts=s.custom_start_ts,
+        )
+
+    def describe_floor(self, state: dict[str, Any] | None = None) -> str:
+        mode = self.s.start_from
+        if mode == "custom" and self.s.custom_start_ts is None:
+            mode = "deploy"
+        label = START_MODE_LABELS[mode]
+        if mode == "subscribe" and state is None:
+            return label
+        return (
+            f"{label} {format_ts(self.floor(state or {}), self.s.style.offset_hours)}"
+        )
+
     # ---------- 订阅存储 ----------
 
-    async def _load(self) -> dict[str, dict[str, dict[str, Any]]]:
+    async def load_subscriptions(self) -> dict[str, dict[str, dict[str, Any]]]:
         data = await self.get_kv_data(KV_SUBSCRIPTIONS, {})
         return data if isinstance(data, dict) else {}
 
-    async def _save(self, data: dict[str, dict[str, dict[str, Any]]]) -> None:
+    async def _save_subscriptions(
+        self, data: dict[str, dict[str, dict[str, Any]]]
+    ) -> None:
         await self.put_kv_data(KV_SUBSCRIPTIONS, data)
+
+    async def _save_stats(self) -> None:
+        try:
+            self.stats.prune()
+            await self.put_kv_data(KV_STATS, self.stats.to_dict())
+        except Exception as exc:
+            logger.warning(f"[FANBOX] 保存统计数据失败: {exc}")
+
+    async def add_subscription(self, umo: str, cid: str) -> dict[str, Any]:
+        """订阅（指令和插件页共用）。"""
+        try:
+            creator = await self.api.get_creator(cid)
+            posts = parse_posts(await self.api.list_posts(cid, LIST_LIMIT))
+        except FanboxNotFound:
+            return {"ok": False, "reason": "not_found", "creator": cid}
+        except FanboxError as exc:
+            logger.warning(f"[FANBOX] 订阅 {cid} 时请求失败: {exc}")
+            return {"ok": False, "reason": "unavailable", "creator": cid}
+
+        user = creator.get("user") if isinstance(creator.get("user"), dict) else {}
+        name = str(user.get("name") or cid)
+        now = time.time()
+        state = initial_state(name, now)
+        async with self._lock:
+            subs = await self.load_subscriptions()
+            per_umo = subs.setdefault(umo, {})
+            if cid in per_umo:
+                return {"ok": False, "reason": "exists", "creator": cid, "name": name}
+            per_umo[cid] = state
+            await self._save_subscriptions(subs)
+        c = self.stats._creator(cid)
+        c["name"] = name
+        if user.get("iconUrl"):
+            c["icon_url"] = str(user["iconUrl"])
+        if posts:
+            c["latest"] = _post_brief(max(posts, key=lambda p: p.ts))
+            c["post_count"] = len(posts)
+        await self._save_stats()
+
+        pending = select_new_posts(
+            posts, state, self.floor(state), now, self.s.max_post_age_hours
+        )
+        return {
+            "ok": True,
+            "creator": cid,
+            "name": name,
+            "floor": self.describe_floor(state),
+            "pending": len(pending),
+            "will_push": min(len(pending), self.s.max_new_per_poll),
+        }
+
+    async def remove_subscription(self, umo: str, cid: str) -> dict[str, Any] | None:
+        async with self._lock:
+            subs = await self.load_subscriptions()
+            per_umo = subs.get(umo) or {}
+            state = per_umo.pop(cid, None)
+            if state is None:
+                return None
+            if not per_umo:
+                subs.pop(umo, None)
+            await self._save_subscriptions(subs)
+            still_used = any(cid in m for m in subs.values())
+        if not still_used:
+            self.stats.forget_creator(cid)
+            await self._save_stats()
+        return state
 
     # ---------- 轮询 ----------
 
-    async def _poll_loop(self):
-        # 等平台适配器连上，再错开一点时间，避免和其他插件同时发请求。
-        await asyncio.sleep(random.uniform(30, 90))
+    async def _sleep_until_next_poll(self) -> None:
+        """等到下一次检查；插件页改了轮询间隔会立刻按新间隔重新计时。"""
         while self._running:
+            self._reschedule.clear()
+            remaining = self.last_poll_at + self.s.poll_interval * 60 - time.time()
+            self.next_poll_at = time.time() + max(0.0, remaining)
+            if remaining <= 0:
+                return
             try:
-                await self._poll_once()
+                await asyncio.wait_for(self._reschedule.wait(), timeout=remaining)
+            except asyncio.TimeoutError:
+                return
+
+    async def _poll_loop(self):
+        while self._running:
+            await self._sleep_until_next_poll()
+            if not self._running:
+                return
+            try:
+                await self.poll_once()
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
                 logger.error(f"[FANBOX] 轮询出错: {exc}")
-            await asyncio.sleep(self.poll_interval * 60)
+                self.last_poll_at = time.time()
 
-    async def _poll_once(self) -> int:
+    async def poll_once(self) -> int:
         """检查全部订阅，返回这次推送出去的帖子数。"""
         total_sent = 0
+        s = self.s
         async with self._lock:
-            subs = await self._load()
+            subs = await self.load_subscriptions()
             creators = sorted({cid for per_umo in subs.values() for cid in per_umo})
             for cid in creators:
+                t0 = time.monotonic()
                 try:
                     posts = parse_posts(await self.api.list_posts(cid, LIST_LIMIT))
                 except FanboxBlocked as exc:
+                    ms = int((time.monotonic() - t0) * 1000)
                     logger.warning(f"[FANBOX] {cid}: {exc}，本轮跳过")
+                    self.stats.record_check(cid, "blocked", ms, message=str(exc))
+                    self.stats.record_error("blocked", str(exc), creator=cid)
+                    continue
+                except FanboxNotFound as exc:
+                    ms = int((time.monotonic() - t0) * 1000)
+                    logger.warning(f"[FANBOX] {cid}: 创作者不存在或已删除（{exc}）")
+                    self.stats.record_check(cid, "not_found", ms, message=str(exc))
+                    self.stats.record_error("not_found", str(exc), creator=cid)
                     continue
                 except FanboxError as exc:
+                    ms = int((time.monotonic() - t0) * 1000)
                     logger.warning(f"[FANBOX] 获取 {cid} 的帖子列表失败: {exc}")
+                    self.stats.record_check(cid, "error", ms, message=str(exc))
+                    self.stats.record_error("list_failed", str(exc), creator=cid)
                     continue
+                ms = int((time.monotonic() - t0) * 1000)
+                latest = max(posts, key=lambda p: p.ts) if posts else None
+                self.stats.record_check(
+                    cid,
+                    "ok",
+                    ms,
+                    name=latest.creator_name if latest else "",
+                    icon_url=latest.creator_icon_url if latest else "",
+                    latest=_post_brief(latest) if latest else None,
+                    post_count=len(posts),
+                )
 
                 changed = False
                 for umo, per_umo in subs.items():
@@ -261,19 +376,21 @@ class FanboxPlugin(Star):
                     fresh = select_new_posts(
                         posts,
                         state,
-                        self._floor(state),
+                        self.floor(state, s),
                         time.time(),
-                        self.max_post_age_hours,
+                        s.max_post_age_hours,
                     )
-                    if len(fresh) > self.max_new_per_poll:
+                    if len(fresh) > s.max_new_per_poll:
                         logger.info(
                             f"[FANBOX] {cid} 有 {len(fresh)} 篇新帖，"
-                            f"只推送最新的 {self.max_new_per_poll} 篇"
+                            f"只推送最新的 {s.max_new_per_poll} 篇"
                         )
-                        fresh = fresh[-self.max_new_per_poll :]
+                        fresh = fresh[-s.max_new_per_poll :]
                     sent: list[Post] = []
                     for post in fresh:
-                        if not await self._send_post(umo, post, state.get("name", "")):
+                        if not await self._send_post(
+                            umo, post, state.get("name", ""), s
+                        ):
                             break
                         sent.append(post)
                     if sent:
@@ -281,16 +398,27 @@ class FanboxPlugin(Star):
                         total_sent += len(sent)
                         changed = True
                 if changed:
-                    await self._save(subs)
+                    await self._save_subscriptions(subs)
                 await asyncio.sleep(random.uniform(1.0, 3.0))
+        self.last_poll_at = time.time()
+        self.last_poll_sent = total_sent
+        await self._save_stats()
         return total_sent
 
-    # ---------- 发送 ----------
+    async def check_now(self) -> int:
+        """立即检查一次（指令和插件页共用），之后按间隔重新计时。"""
+        sent = await self.poll_once()
+        self._reschedule.set()
+        return sent
 
-    def _cover_allowed(self, post: Post) -> bool:
-        return bool(post.cover_url) and (self.send_adult_cover or not post.adult)
+    # ---------- 生成消息 ----------
 
-    async def _download(self, url: str, cache: dict[str, bytes | None]) -> bytes | None:
+    def _cover_allowed(self, post: Post, s: Settings) -> bool:
+        return bool(post.cover_url) and (s.send_adult_cover or not post.adult)
+
+    async def _download(
+        self, url: str, cache: dict[str, bytes | None], creator: str = ""
+    ) -> bytes | None:
         if not url:
             return None
         if url not in cache:
@@ -298,87 +426,133 @@ class FanboxPlugin(Star):
                 cache[url] = await self.api.download_image(url)
             except FanboxError as exc:
                 logger.warning(f"[FANBOX] 图片下载失败: {exc}")
+                self.stats.record_error("image_failed", str(exc), creator=creator)
                 cache[url] = None
         return cache[url]
 
     async def _render_card(
-        self, post: Post, name: str, cache: dict[str, bytes | None]
+        self, post: Post, name: str, cache: dict[str, bytes | None], s: Settings
     ) -> bytes:
-        hide_cover = post.adult and not self.send_adult_cover
-        cover = None if hide_cover else await self._download(post.cover_url, cache)
-        avatar = await self._download(post.creator_icon_url, cache)
-        opts = CardOptions(
-            show_fee=self.style.show_fee,
-            show_timezone=self.style.show_timezone,
-            show_adult_mark=self.style.show_adult_mark,
-            show_likes=self.card_show_likes,
-            excerpt_lines=self.card_excerpt_lines,
-            title_lines=self.card_title_lines,
-            offset_hours=self.style.offset_hours,
-            hide_cover=hide_cover,
-            font_path=self.card_font_path,
-            bold_font_path=self.card_bold_font_path,
+        hide_cover = post.adult and not s.send_adult_cover
+        cover = (
+            None
+            if hide_cover
+            else await self._download(post.cover_url, cache, post.creator_id)
         )
-        # Pillow 画图是 CPU 活，放到线程里，别卡住机器人
-        return await asyncio.to_thread(render_card, post, name, cover, avatar, opts)
+        avatar = await self._download(post.creator_icon_url, cache, post.creator_id)
+        opts = CardOptions(
+            show_fee=s.style.show_fee,
+            show_timezone=s.style.show_timezone,
+            show_adult_mark=s.style.show_adult_mark,
+            show_likes=s.card_show_likes,
+            excerpt_lines=s.card_excerpt_lines,
+            title_lines=s.card_title_lines,
+            offset_hours=s.style.offset_hours,
+            hide_cover=hide_cover,
+            font_path=s.card_font_path,
+            bold_font_path=s.card_bold_font_path,
+        )
+        t0 = time.monotonic()
+        try:
+            # Pillow 画图是 CPU 活，放到线程里，别卡住机器人
+            data = await asyncio.to_thread(render_card, post, name, cover, avatar, opts)
+        except Exception as exc:
+            self.stats.record_card(False, 0)
+            self.stats.record_error(
+                "card_failed", str(exc), creator=post.creator_id, post_id=post.id
+            )
+            raise
+        self.stats.record_card(True, int((time.monotonic() - t0) * 1000))
+        return data
 
-    async def _image_component(
-        self, kind: str, post: Post, name: str, cache: dict[str, bytes | None]
-    ):
-        if kind == "cover_image":
-            if not (self.send_cover and self._cover_allowed(post)):
-                return None
-            data = await self._download(post.cover_url, cache)
-        elif kind == "avatar_image":
-            data = await self._download(post.creator_icon_url, cache)
-        elif kind == "card_image":
-            try:
-                data = await self._render_card(post, name, cache)
-            except Exception as exc:
-                logger.warning(f"[FANBOX] 帖子 {post.id} 卡片图渲染失败: {exc}")
-                data = None
-        else:
-            data = None
-        return Image.fromBytes(data) if data else None
-
-    async def _build_chain(
-        self, post: Post, name: str, headline: str = "发布了新帖"
-    ) -> list:
+    async def build_pieces(
+        self,
+        post: Post,
+        name: str,
+        headline: str = "发布了新帖",
+        s: Settings | None = None,
+    ) -> list[Piece]:
+        """按推送样式生成消息片段：("text", 文字) 或 ("image", 图片字节)。"""
+        s = s or self.s
         cache: dict[str, bytes | None] = {}
         name = name or post.creator_name or post.creator_id
-        if self.push_style == "card":
+        if s.push_style == "card":
             try:
-                return [Image.fromBytes(await self._render_card(post, name, cache))]
+                return [("image", await self._render_card(post, name, cache, s))]
             except Exception as exc:
                 logger.warning(
                     f"[FANBOX] 帖子 {post.id} 卡片图渲染失败，改发文字模板: {exc}"
                 )
 
         values = build_variables(
-            post, name, self.style, headline, self._cover_allowed(post)
+            post, name, s.style, headline, self._cover_allowed(post, s)
         )
-        chain: list = []
-        for kind, value in render_template(self.template, values):
+        pieces: list[Piece] = []
+        for kind, value in render_template(s.template, values):
             if kind == "text":
-                chain.append(Plain(value))
+                pieces.append(("text", value))
                 continue
-            comp = await self._image_component(value, post, name, cache)
-            if comp is not None:
-                chain.append(comp)
-        return chain or [Plain(post.url)]
+            data: bytes | None = None
+            if value == "cover_image":
+                if s.send_cover and self._cover_allowed(post, s):
+                    data = await self._download(post.cover_url, cache, post.creator_id)
+            elif value == "avatar_image":
+                data = await self._download(
+                    post.creator_icon_url, cache, post.creator_id
+                )
+            elif value == "card_image":
+                try:
+                    data = await self._render_card(post, name, cache, s)
+                except Exception as exc:
+                    logger.warning(f"[FANBOX] 帖子 {post.id} 卡片图渲染失败: {exc}")
+            if data:
+                pieces.append(("image", data))
+        return pieces or [("text", post.url)]
 
-    async def _send_post(self, umo: str, post: Post, name: str) -> bool:
-        chain = await self._build_chain(post, name)
+    async def _build_chain(
+        self,
+        post: Post,
+        name: str,
+        headline: str = "发布了新帖",
+        s: Settings | None = None,
+    ) -> list:
+        chain: list = []
+        for kind, value in await self.build_pieces(post, name, headline, s):
+            chain.append(Plain(value) if kind == "text" else Image.fromBytes(value))
+        return chain
+
+    async def _send_post(self, umo: str, post: Post, name: str, s: Settings) -> bool:
+        name = name or post.creator_name or post.creator_id
+        chain = await self._build_chain(post, name, s=s)
+        error = ""
         try:
             ok = await self.context.send_message(umo, MessageChain(chain=chain))
+            if ok is False:
+                error = "找不到会话"
         except Exception as exc:
-            logger.warning(f"[FANBOX] 推送帖子 {post.id} 到 {umo} 失败: {exc}")
-            return False
-        if ok is False:
-            logger.warning(f"[FANBOX] 推送帖子 {post.id} 到 {umo} 失败：找不到会话")
+            error = str(exc) or exc.__class__.__name__
+        info = dict(
+            name=name,
+            post_id=post.id,
+            title=post.title,
+            post_url=post.url,
+            umo=umo,
+            style=s.push_style,
+        )
+        if error:
+            logger.warning(f"[FANBOX] 推送帖子 {post.id} 到 {umo} 失败: {error}")
+            self.stats.record_push(post.creator_id, ok=False, error=error, **info)
+            self.stats.record_error(
+                "send_failed", error, creator=post.creator_id, umo=umo, post_id=post.id
+            )
             return False
         logger.info(f"[FANBOX] 已推送 {post.creator_id}/{post.id} 到 {umo}")
+        self.stats.record_push(post.creator_id, ok=True, **info)
         return True
+
+    async def latest_post(self, cid: str) -> Post | None:
+        posts = parse_posts(await self.api.list_posts(cid, LIST_LIMIT))
+        return max(posts, key=lambda p: p.ts) if posts else None
 
     # ---------- 指令 ----------
 
@@ -392,46 +566,25 @@ class FanboxPlugin(Star):
                 "例如：/fanbox关注 official 或 /fanbox关注 https://official.fanbox.cc"
             )
             return
-        try:
-            creator = await self.api.get_creator(cid)
-            posts = parse_posts(await self.api.list_posts(cid, LIST_LIMIT))
-        except FanboxNotFound:
+        result = await self.add_subscription(event.unified_msg_origin, cid)
+        reason = result.get("reason")
+        if reason == "not_found":
             yield event.plain_result(f"没找到 FANBOX 创作者：{cid}")
             return
-        except FanboxError as exc:
-            logger.warning(f"[FANBOX] 订阅 {cid} 时请求失败: {exc}")
+        if reason == "unavailable":
             yield event.plain_result(
                 f"订阅 {cid} 失败：FANBOX 暂时访问不了，请稍后再试"
             )
             return
-
-        user = creator.get("user") if isinstance(creator.get("user"), dict) else {}
-        name = str(user.get("name") or cid)
-        umo = event.unified_msg_origin
-        now = time.time()
-        state = initial_state(name, now)
-        async with self._lock:
-            subs = await self._load()
-            per_umo = subs.setdefault(umo, {})
-            already = cid in per_umo
-            if not already:
-                per_umo[cid] = state
-                await self._save(subs)
-        if already:
-            yield event.plain_result(f"这里已经订阅了 {name}（{cid}）")
+        if reason == "exists":
+            yield event.plain_result(f"这里已经订阅了 {result['name']}（{cid}）")
             return
-
-        pending = select_new_posts(
-            posts, state, self._floor(state), now, self.max_post_age_hours
-        )
-        lines = [f"已订阅 FANBOX：{name}（{cid}）"]
-        lines.append(
-            f"推送起点：{self._describe_floor(state)}，更早发布的帖子不会推送。"
-        )
-        if pending:
-            n = min(len(pending), self.max_new_per_poll)
+        lines = [f"已订阅 FANBOX：{result['name']}（{cid}）"]
+        lines.append(f"推送起点：{result['floor']}，更早发布的帖子不会推送。")
+        if result["pending"]:
             lines.append(
-                f"起点之后已经发布了 {len(pending)} 篇，下次检查时会推送其中 {n} 篇。"
+                f"起点之后已经发布了 {result['pending']} 篇，"
+                f"下次检查时会推送其中 {result['will_push']} 篇。"
             )
         lines.append("之后有新帖会推送到这里。")
         yield event.plain_result("\n".join(lines))
@@ -443,15 +596,7 @@ class FanboxPlugin(Star):
         if not cid:
             yield event.plain_result("用法：/fanbox取关 <创作者ID>")
             return
-        umo = event.unified_msg_origin
-        async with self._lock:
-            subs = await self._load()
-            per_umo = subs.get(umo) or {}
-            state = per_umo.pop(cid, None)
-            if state is not None:
-                if not per_umo:
-                    subs.pop(umo, None)
-                await self._save(subs)
+        state = await self.remove_subscription(event.unified_msg_origin, cid)
         if state is None:
             yield event.plain_result(f"这里没有订阅 {cid}")
             return
@@ -460,7 +605,7 @@ class FanboxPlugin(Star):
     @filter.command("fanbox列表", alias={"fanbox_list"})
     async def list_subscriptions(self, event: AstrMessageEvent):
         """查看这里订阅了哪些 FANBOX 创作者"""
-        subs = await self._load()
+        subs = await self.load_subscriptions()
         per_umo = subs.get(event.unified_msg_origin) or {}
         if not per_umo:
             yield event.plain_result(
@@ -470,12 +615,12 @@ class FanboxPlugin(Star):
         lines = [f"这里订阅了 {len(per_umo)} 位 FANBOX 创作者："]
         for cid, state in sorted(per_umo.items()):
             lines.append(f"· {state.get('name') or cid}（{cid}）")
-        if self.start_from == "subscribe":
+        if self.s.start_from == "subscribe":
             lines.append("推送起点：各自的订阅时间")
         else:
-            lines.append(f"推送起点：{self._describe_floor({})}")
-        if self.max_post_age_hours:
-            lines.append(f"发布超过 {self.max_post_age_hours} 小时的帖子不推送")
+            lines.append(f"推送起点：{self.describe_floor({})}")
+        if self.s.max_post_age_hours:
+            lines.append(f"发布超过 {self.s.max_post_age_hours} 小时的帖子不推送")
         yield event.plain_result("\n".join(lines))
 
     @filter.command("fanbox最新", alias={"fanbox_latest"})
@@ -486,7 +631,7 @@ class FanboxPlugin(Star):
             yield event.plain_result("用法：/fanbox最新 <创作者ID或主页链接>")
             return
         try:
-            posts = parse_posts(await self.api.list_posts(cid, LIST_LIMIT))
+            post = await self.latest_post(cid)
         except FanboxNotFound:
             yield event.plain_result(f"没找到 FANBOX 创作者：{cid}")
             return
@@ -494,19 +639,18 @@ class FanboxPlugin(Star):
             logger.warning(f"[FANBOX] 获取 {cid} 最新帖失败: {exc}")
             yield event.plain_result("FANBOX 暂时访问不了，请稍后再试")
             return
-        if not posts:
+        if post is None:
             yield event.plain_result(f"{cid} 还没有发过帖子")
             return
-        post = max(posts, key=lambda p: p.ts)
         yield event.chain_result(
             await self._build_chain(post, post.creator_name, "的最新帖子")
         )
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("fanbox检查", alias={"fanbox_check"})
-    async def check_now(self, event: AstrMessageEvent):
+    async def check_command(self, event: AstrMessageEvent):
         """（管理员）立即检查一次全部订阅"""
-        sent = await self._poll_once()
+        sent = await self.check_now()
         yield event.plain_result(f"检查完成，推送了 {sent} 篇新帖")
 
     @filter.command("fanbox变量", alias={"fanbox_vars"})
