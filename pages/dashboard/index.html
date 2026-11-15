@@ -17,61 +17,112 @@
       <div class="live" id="live" aria-live="polite"><span class="ring" aria-hidden="true"><svg viewBox="0 0 20 20"><circle class="bg" cx="10" cy="10" r="8"/><circle class="fg" id="ringFg" cx="10" cy="10" r="8"/></svg><span class="dot"></span></span><span id="liveText">连接中…</span></div>
     </div>
   </div>
+  <div class="wrap tabs-row">
+    <nav class="tabs enter" id="tabs" role="tablist" aria-label="面板分区" style="animation-delay:120ms">
+      <span class="tab-ind" id="tabInd" aria-hidden="true"></span>
+      <button class="tab" type="button" role="tab" id="tab-overview" data-tab="overview" aria-controls="panel-overview" aria-selected="true">概览</button>
+      <button class="tab" type="button" role="tab" id="tab-records" data-tab="records" aria-controls="panel-records" aria-selected="false">推送记录</button>
+      <button class="tab" type="button" role="tab" id="tab-subs" data-tab="subs" aria-controls="panel-subs" aria-selected="false">订阅</button>
+      <button class="tab" type="button" role="tab" id="tab-style" data-tab="style" aria-controls="panel-style" aria-selected="false">推送样式</button>
+      <button class="tab" type="button" role="tab" id="tab-settings" data-tab="settings" aria-controls="panel-settings" aria-selected="false">设置</button>
+    </nav>
+  </div>
 </header>
 
 <main class="wrap" id="main">
-  <section class="hero card rv enter" aria-label="推送概览">
-    <div class="hero-main">
-      <span class="eyebrow">近 24 小时推送</span>
-      <div class="hero-num sk" id="heroNum" data-v="0">00000</div>
-      <div class="hero-meta" id="heroMeta">&nbsp;</div>
-      <div class="spark-box" aria-hidden="true">
-        <svg class="spark" id="spark" viewBox="0 0 300 60" preserveAspectRatio="none">
-          <defs><linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a9cf0" stop-opacity=".22"/><stop offset="1" stop-color="#4a9cf0" stop-opacity="0"/></linearGradient></defs>
-          <path class="area" id="sparkArea" d=""/><path class="line" id="sparkLine" d=""/>
-        </svg>
-        <span class="spark-dot" id="sparkDot"><i></i></span>
-      </div>
-    </div>
-    <div class="tiles" id="tiles"></div>
-  </section>
+  <div class="layout">
+    <div class="panels">
+      <!-- 概览 -->
+      <section class="panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview">
+        <section class="hero card rv enter" id="ch-hero" data-chapter="推送概况" aria-label="推送概览">
+          <div class="hero-main">
+            <span class="eyebrow">近 24 小时推送</span>
+            <div class="hero-num sk" id="heroNum" data-v="0">00000</div>
+            <div class="hero-meta" id="heroMeta">&nbsp;</div>
+            <div class="spark-box" aria-hidden="true">
+              <svg class="spark" id="spark" viewBox="0 0 300 60" preserveAspectRatio="none">
+                <defs><linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8cc2ee" stop-opacity=".22"/><stop offset="1" stop-color="#8cc2ee" stop-opacity="0"/></linearGradient></defs>
+                <path class="area" id="sparkArea" d=""/><path class="line" id="sparkLine" d=""/>
+              </svg>
+              <span class="spark-dot" id="sparkDot"><i></i></span>
+            </div>
+          </div>
+          <div class="tiles" id="tiles"></div>
+        </section>
+        <div class="section-head rv enter" id="ch-creators" data-chapter="创作者" style="animation-delay:140ms">
+          <div class="lead"><h2>创作者</h2><span class="hint" id="creatorHint">每 30 秒自动刷新</span></div>
+          <div class="actions"><button class="btn sm primary" id="checkBtn" type="button">立即检查</button></div>
+        </div>
+        <section id="creators" aria-label="创作者">
+          <div class="card ghost" aria-hidden="true"><div class="g1"><span class="sk g-av"></span><span class="sk g-t"></span></div><span class="sk g-b"></span><span class="sk g-c"></span></div>
+        </section>
+      </section>
 
-  <div class="section-head rv enter" style="animation-delay:140ms">
-    <div class="lead"><h2>创作者</h2><span class="hint" id="creatorHint">每 30 秒自动刷新</span></div>
-    <div class="actions">
-      <button class="btn sm" id="addToggle" type="button">添加订阅</button>
-      <button class="btn sm primary" id="checkBtn" type="button">立即检查</button>
+      <!-- 推送记录 -->
+      <section class="panel" id="panel-records" role="tabpanel" aria-labelledby="tab-records" hidden>
+        <div class="section-head first">
+          <div class="lead"><h2>推送记录</h2><span class="hint" id="pushHint">推送到 QQ 的帖子，按 FANBOX 网页的卡片样式展示</span></div>
+          <div class="actions"><div class="seg" id="recordView" role="group" aria-label="显示方式"><button type="button" data-view="cards" aria-pressed="true">卡片</button><button type="button" data-view="list" aria-pressed="false">列表</button></div></div>
+        </div>
+        <div id="records" aria-label="推送记录"><div class="card ghost" aria-hidden="true"><span class="sk g-b"></span></div></div>
+        <div class="section-head" id="ch-errors" data-chapter="最近报错"><h2>最近报错</h2><span class="hint" id="errHint">FANBOX 返回的原因和插件的处理结果</span></div>
+        <section class="card errs" id="errors" aria-label="最近报错">
+          <div class="err-ghost" aria-hidden="true"><span class="sk"></span><span class="sk"></span></div>
+        </section>
+      </section>
+
+      <!-- 订阅 -->
+      <section class="panel" id="panel-subs" role="tabpanel" aria-labelledby="tab-subs" hidden>
+        <section class="card panel-card" id="ch-add" data-chapter="添加订阅" aria-label="添加订阅">
+          <h3>添加订阅</h3>
+          <span class="hint">和在 QQ 里发 /fanbox关注 一样，按当前的推送起点开始推送。</span>
+          <form class="form-row" id="addForm" autocomplete="off">
+            <label class="field"><span>创作者 ID 或主页链接</span><input class="input mono" id="addCreator" placeholder="例如 official 或 https://official.fanbox.cc" required></label>
+            <div class="field"><span>推送到</span>
+              <div class="row"><select class="select" id="addSession"></select><input class="input mono" id="addQQ" placeholder="QQ 号" hidden inputmode="numeric"></div>
+            </div>
+            <button class="btn primary" id="addSubmit" type="submit" style="height:36px">订阅</button>
+          </form>
+        </section>
+        <div id="sessions" aria-label="订阅会话"></div>
+      </section>
+
+      <!-- 推送样式 -->
+      <section class="panel" id="panel-style" role="tabpanel" aria-labelledby="tab-style" hidden>
+        <div class="style-layout">
+          <div class="style-forms" id="styleForms"><div class="card ghost" aria-hidden="true"><span class="sk g-b"></span></div></div>
+          <aside class="card preview-dock" id="previewDock" aria-label="实时预览" data-chapter="实时预览" data-chapter-max="900">
+            <div class="pv-head">
+              <div><h3>实时预览</h3><span class="hint" id="pvHint">改动样式里的任何一项，这里都会自动按新样式重新生成（包括还没保存的修改）</span></div>
+              <span class="pill p-muted" id="pvState">待命</span>
+            </div>
+            <label class="field"><span>FANBOX 帖子链接或创作者 ID</span>
+              <div class="row"><input class="input mono" id="pvUrl" placeholder="https://<ID>.fanbox.cc/posts/<帖子号>，或创作者 ID" spellcheck="false" autocomplete="off"><button class="btn sm primary" id="pvGo" type="button">预览</button></div>
+            </label>
+            <div class="chips pv-quick" id="pvQuick"></div>
+            <div class="pv-post" id="pvPost"></div>
+            <div class="preview-body" id="pvBody"><div class="preview-empty">填一个 FANBOX 帖子链接，或点上面的创作者，就能看到按当前样式推送出来的效果</div></div>
+            <div class="pv-send" id="pvSendBox">
+              <b>测试推送</b>
+              <span class="hint">把上面预览的这条消息真的发一次。不影响订阅进度，也不计入统计；推送记录里会标成"测试"。</span>
+              <div class="row"><select class="select" id="pvSession" aria-label="测试推送到哪个会话"></select><input class="input mono" id="pvQQ" placeholder="QQ 号" hidden inputmode="numeric"><button class="btn sm" id="pvSend" type="button">发送</button></div>
+              <span class="hint pv-send-note" id="pvSendNote" role="status" hidden></span>
+              <div class="chips"><button class="chip" id="pvFriend" type="button">发到私聊（填 QQ 号）</button></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- 设置 -->
+      <section class="panel" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+        <div id="settingsForms"><div class="card ghost" aria-hidden="true"><span class="sk g-b"></span></div></div>
+      </section>
     </div>
+    <aside class="chapters" id="chapters" aria-label="本页章节" hidden>
+      <span class="ch-title">本页章节</span>
+      <ol id="chapterList"></ol>
+    </aside>
   </div>
-  <section class="card panel rv" id="addPanel" hidden aria-label="添加订阅">
-    <h3>添加订阅</h3>
-    <span class="hint">和在 QQ 里发 /fanbox关注 一样，按当前的推送起点开始推送。</span>
-    <form class="form-row" id="addForm" autocomplete="off">
-      <label class="field"><span>创作者 ID 或主页链接</span><input class="input mono" id="addCreator" placeholder="例如 official 或 https://official.fanbox.cc" required></label>
-      <div class="field"><span>推送到</span>
-        <div class="row"><select class="select" id="addSession"></select><input class="input mono" id="addQQ" placeholder="QQ 号" hidden inputmode="numeric"></div>
-      </div>
-      <button class="btn primary" id="addSubmit" type="submit" style="height:36px">订阅</button>
-    </form>
-  </section>
-  <section id="creators" aria-label="创作者">
-    <div class="card ghost" aria-hidden="true"><div class="g1"><span class="sk g-av"></span><span class="sk g-t"></span></div><span class="sk g-b"></span><span class="sk g-c"></span></div>
-  </section>
-
-  <div class="section-head rv enter" style="animation-delay:200ms"><h2>推送记录</h2><span class="hint" id="pushHint">最近推送到 QQ 的帖子</span></div>
-  <section class="card errs enter" id="pushes" aria-label="推送记录" style="animation-delay:240ms">
-    <div class="err-ghost" aria-hidden="true"><span class="sk"></span><span class="sk"></span></div>
-  </section>
-
-  <div class="section-head rv enter" style="animation-delay:260ms"><h2>最近报错</h2><span class="hint" id="errHint">FANBOX 返回的原因和插件的处理结果</span></div>
-  <section class="card errs enter" id="errors" aria-label="最近报错" style="animation-delay:300ms">
-    <div class="err-ghost" aria-hidden="true"><span class="sk"></span><span class="sk"></span></div>
-  </section>
-
-  <div class="section-head rv enter" style="animation-delay:320ms"><h2>设置</h2><span class="hint" id="setHint">全部设置都能在这里改，保存后立即生效，不用重启</span></div>
-  <section class="settings" id="settings" aria-label="设置">
-    <div class="card ghost" aria-hidden="true"><div class="g1"><span class="sk g-av"></span><span class="sk g-t"></span></div><span class="sk g-b"></span></div>
-  </section>
   <footer class="rv" id="foot"></footer>
 </main>
 

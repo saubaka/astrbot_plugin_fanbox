@@ -342,3 +342,54 @@ def test_download_image_only_pximg():
         with pytest.raises(FanboxError):
             run(go(bad))
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("https://creator-a.fanbox.cc/posts/12345", ("creator-a", "12345")),
+        ("https://www.fanbox.cc/@creator-a/posts/12345?utm=1", ("creator-a", "12345")),
+        ("creator-a.fanbox.cc/posts/12345/", ("creator-a", "12345")),
+        ("https://creator-a.fanbox.cc", ("creator-a", None)),
+        ("@Creator-A", ("creator-a", None)),
+        ("https://creator-a.fanbox.cc/posts/abc", ("creator-a", None)),
+        ("https://www.fanbox.cc/", (None, None)),
+        ("", (None, None)),
+        ("bad id!", (None, None)),
+    ],
+)
+def test_parse_post_ref(text, expected):
+    from fanbox_core import parse_post_ref
+
+    assert parse_post_ref(text) == expected
+
+
+def test_api_page_urls_and_page_fetch_are_restricted():
+    page = "https://api.fanbox.cc/post.listCreator?creatorId=x&firstPublishedDatetime=2026-01-01&firstId=1&sort=newest&limit=10"
+    calls = []
+
+    def handler(request):
+        calls.append(str(request.url))
+        if request.url.path == "/post.paginateCreator":
+            return httpx.Response(
+                200, json={"body": {"pageUrls": [page, "https://evil.example/x", 3]}}
+            )
+        return httpx.Response(
+            200, json={"body": {"posts": [raw_post(7, "2026-01-01T00:00:00+09:00")]}}
+        )
+
+    async def go():
+        api = make_api(handler)
+        try:
+            urls = await api.page_urls("x")
+            posts = await api.list_posts_page(urls[0])
+            with pytest.raises(FanboxError):
+                await api.list_posts_page("https://evil.example/post.listCreator?x=1")
+            return urls, posts
+        finally:
+            await api.close()
+
+    urls, posts = run(go())
+    assert urls == [page]
+    assert len(posts) == 1
+    assert len(calls) == 2  # 不允许的地址根本没有发出请求

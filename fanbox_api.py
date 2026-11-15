@@ -65,9 +65,11 @@ class FanboxAPI:
             kwargs["transport"] = transport
         self._client = httpx.AsyncClient(**kwargs)
 
-    async def _get_body(self, path: str, params: dict[str, Any]) -> Any:
+    async def _get_body(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        """path 可以是接口路径（/post.listCreator），也可以是 FANBOX 给的完整分页地址。"""
+        url = path if path.startswith(API_BASE + "/") else API_BASE + path
         try:
-            resp = await self._client.get(API_BASE + path, params=params)
+            resp = await self._client.get(url, params=params)
         except httpx.HTTPError as exc:
             raise FanboxError(f"请求 FANBOX 失败: {exc.__class__.__name__}") from exc
 
@@ -97,6 +99,25 @@ class FanboxAPI:
         body = await self._get_body(
             "/post.listCreator", {"creatorId": creator_id, "limit": limit}
         )
+        posts = body.get("posts") if isinstance(body, dict) else body
+        if not isinstance(posts, list):
+            raise FanboxError("FANBOX 帖子列表格式不对")
+        return posts
+
+    async def page_urls(self, creator_id: str) -> list[str]:
+        """创作者帖子列表的全部分页地址（第 1 页是最新的 10 篇）。"""
+        body = await self._get_body("/post.paginateCreator", {"creatorId": creator_id})
+        urls = body.get("pageUrls") if isinstance(body, dict) else body
+        if not isinstance(urls, list):
+            raise FanboxError("FANBOX 分页列表格式不对")
+        prefix = API_BASE + "/post.listCreator?"
+        return [u for u in urls if isinstance(u, str) and u.startswith(prefix)]
+
+    async def list_posts_page(self, page_url: str) -> list[Any]:
+        """按分页地址取一页帖子；只接受 api.fanbox.cc 的帖子列表地址。"""
+        if not page_url.startswith(API_BASE + "/post.listCreator?"):
+            raise FanboxError("不允许的分页地址")
+        body = await self._get_body(page_url)
         posts = body.get("posts") if isinstance(body, dict) else body
         if not isinstance(posts, list):
             raise FanboxError("FANBOX 帖子列表格式不对")
