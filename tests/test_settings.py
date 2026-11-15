@@ -31,9 +31,11 @@ def test_defaults_build_cleanly():
 def test_card_text_settings():
     vals = defaults()
     vals["style"]["card_text"] = "separate"
-    vals["style"]["card_template"] = "{title} {nope}"
+    vals["style"]["card_template"] = "{title} {nope}\n{card_image}"
     s, warnings = build_settings(vals)
-    assert s.card_text == "separate" and s.card_template == "{title} {nope}"
+    assert (
+        s.card_text == "separate" and s.card_template == "{title} {nope}\n{card_image}"
+    )
     assert not s.card_template_is_default
     assert len(warnings) == 1 and "卡片图配文模板" in warnings[0]
     vals["style"]["card_text"] = "both"
@@ -43,6 +45,30 @@ def test_card_text_settings():
     assert len(warnings) == 1 and "配文方式" in warnings[0]
     _, errors = validate({"style": {"card_text": "both"}}, SCHEMA, defaults())
     assert any("只能是" in e for e in errors)
+
+
+def test_card_template_must_keep_one_card_element():
+    for bad in ("{title}\n{post_url}", "{card_image}{card_image}"):
+        _, errors = validate({"style": {"card_template": bad}}, SCHEMA, defaults())
+        assert any("{card_image}" in e for e in errors), bad
+    for ok in ("", "{card_image}\n{post_url}"):
+        _, errors = validate({"style": {"card_template": ok}}, SCHEMA, defaults())
+        assert errors == [], ok
+
+
+def test_old_card_template_gets_card_element():
+    # v0.6.0 存下来的配文模板没有 {card_image}：读出时补在末尾，卡片图仍在文字下方
+    cfg = {"style": {"card_template": "{creator_name}\n发布了新的FANBOX文章：\n\n"}}
+    vals = current_values(cfg, SCHEMA)
+    assert (
+        vals["style"]["card_template"]
+        == "{creator_name}\n发布了新的FANBOX文章：\n{card_image}"
+    )
+    s, warnings = build_settings(vals)
+    assert warnings == [] and s.card_template.endswith("{card_image}")
+    # 读出来的值再提交其他修改，校验能通过
+    _, errors = validate({"style": {"push_style": "card"}}, SCHEMA, vals)
+    assert errors == []
 
 
 def test_current_values_reads_groups_and_legacy_flat_config():
@@ -162,6 +188,8 @@ def test_page_files_exist():
         "function updateStyleRows",
         "card_template",
         "res.messages",
+        "把卡片图移到光标处",
+        "keepFirstCard",
         "data-chapter",
     ):
         assert needed in js, needed

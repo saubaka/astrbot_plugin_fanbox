@@ -13,21 +13,25 @@ from typing import Any
 
 try:
     from .fanbox_core import (
+        CARD_ELEMENT,
         CARD_TEXT_MODES,
         DEFAULT_CARD_TEMPLATE,
         DEFAULT_TEMPLATE,
         START_MODES,
         StyleOptions,
+        ensure_card_element,
         parse_start_time,
         unknown_variables,
     )
 except ImportError:  # 测试时作为顶层模块导入
     from fanbox_core import (
+        CARD_ELEMENT,
         CARD_TEXT_MODES,
         DEFAULT_CARD_TEMPLATE,
         DEFAULT_TEMPLATE,
         START_MODES,
         StyleOptions,
+        ensure_card_element,
         parse_start_time,
         unknown_variables,
     )
@@ -77,6 +81,8 @@ def current_values(config: Any, schema: dict[str, Any]) -> dict[str, dict[str, A
                 value = config.get(key)
             else:
                 value = item.get("default")
+            if key == "card_template" and isinstance(value, str):
+                value = ensure_card_element(value)
             out[group][key] = value
     return out
 
@@ -154,6 +160,9 @@ def validate(
         offset = content.get("timezone_offset_hours", 8)
         if parse_start_time(start.get("start_time", ""), int(offset or 0)) is None:
             errors.append("自定义起点时间：格式不对，例如 2026-11-15 08:00")
+    card_tpl = merged.get("style", {}).get("card_template") or ""
+    if card_tpl and card_tpl.count(CARD_ELEMENT) != 1:
+        errors.append("卡片图配文模板：必须保留且只能有一个 {card_image}（卡片图本身）")
     fmt = content.get("time_format") or ""
     if fmt:
         try:
@@ -236,7 +245,7 @@ def build_settings(values: dict[str, dict[str, Any]]) -> tuple[Settings, list[st
     if card_text not in CARD_TEXT_MODES:
         warnings.append(f"未知的卡片图配文方式 {card_text!r}，改用 merge")
         card_text = "merge"
-    raw_card_template = _str(flat.get("card_template", ""))
+    raw_card_template = ensure_card_element(_str(flat.get("card_template", "")))
     card_template = raw_card_template or DEFAULT_CARD_TEMPLATE
     bad = unknown_variables(card_template)
     if bad:

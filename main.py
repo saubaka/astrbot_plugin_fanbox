@@ -27,12 +27,12 @@ from .fanbox_core import (
     advance_state,
     build_variables,
     card_messages,
+    ensure_card_element,
     format_ts,
     initial_state,
     parse_creator_id,
     parse_posts,
     render_template,
-    render_text_only,
     select_new_posts,
     start_floor,
     subscribed_at,
@@ -143,6 +143,7 @@ class FanboxPlugin(Star):
     # ---------- 生命周期 ----------
 
     async def initialize(self):
+        await self._migrate_card_template()
         stored = await self.get_kv_data(KV_DEPLOYED_AT, None)
         try:
             stored = float(stored) if stored else 0.0
@@ -187,6 +188,26 @@ class FanboxPlugin(Star):
         logger.info("[FANBOX] 插件已停止")
 
     # ---------- 设置 ----------
+
+    async def _migrate_card_template(self) -> None:
+        """v0.6.0 的卡片图配文模板里没有 {card_image}：补在末尾（卡片图仍在文字下方）并写回配置。"""
+        section = self.config.get("style") if hasattr(self.config, "get") else None
+        if not isinstance(section, dict):
+            return
+        raw = section.get("card_template")
+        if not isinstance(raw, str) or not raw:
+            return
+        fixed = ensure_card_element(raw)
+        if fixed == raw:
+            return
+        section["card_template"] = fixed
+        try:
+            result = self.config.save_config()
+            if asyncio.iscoroutine(result):
+                await result
+            logger.info("[FANBOX] 卡片图配文模板里补上了 {card_image}（卡片图元素）")
+        except Exception as exc:
+            logger.warning(f"[FANBOX] 写回卡片图配文模板失败（不影响推送）: {exc}")
 
     def setting_values(self) -> dict[str, dict[str, Any]]:
         return current_values(self.config, self.schema)
@@ -531,13 +552,13 @@ class FanboxPlugin(Star):
                     f"[FANBOX] 帖子 {post.id} 卡片图渲染失败，改发文字模板: {exc}"
                 )
             else:
-                text = ""
+                pieces: list[tuple[str, str]] = []
                 if s.card_text != "none":
                     values = build_variables(
                         post, name, s.style, headline, self._cover_allowed(post, s)
                     )
-                    text = render_text_only(s.card_template, values)
-                return card_messages(card, text, s.card_text)
+                    pieces = render_template(s.card_template, values)
+                return card_messages(pieces, card, s.card_text)
         return [await self._template_pieces(post, name, headline, s, cache)]
 
     async def build_pieces(
