@@ -119,5 +119,10 @@ def test_page_files_exist():
         assert (page / name).is_file()
     html = (page / "index.html").read_text("utf-8")
     assert "./app.js" in html and "./style.css" in html
+    # AstrBot 会把桥接脚本插到 </body> 前；必须自己在 app.js 之前引用，
+    # 否则页面脚本运行时还没有 window.AstrBotPluginPage
+    assert html.index("/api/plugin/page/bridge-sdk.js") < html.index("./app.js")
+    css = (page / "style.css").read_text("utf-8")
+    assert "@keyframes enterRvSafe" in css  # Safari 重影修复
     for lang in ("zh-CN", "en-US"):
         assert (ROOT / ".astrbot-plugin" / "i18n" / f"{lang}.json").is_file()

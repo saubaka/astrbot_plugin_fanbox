@@ -82,6 +82,8 @@
 </div>
 <div class="tip" id="tip" role="tooltip"></div>
 <div class="toast" id="toast" role="status"></div>
+<!-- AstrBot 会把这个地址换成带令牌的桥接脚本；必须放在 app.js 前面，否则页面脚本运行时还没有 window.AstrBotPluginPage -->
+<script src="/api/plugin/page/bridge-sdk.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>

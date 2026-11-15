@@ -410,3 +410,35 @@ html,body{background-color:var(--bg)}
 .brand{min-width:0;flex:1 1 auto}
 .brand > div{min-width:0}
 @media (max-width:560px){#refreshBtn{display:none}.brand-mark{width:30px;height:30px;font-size:12px}}
+
+/* v0.4.1：AstrBot 插件页里的窄宽度修正 */
+.brand h1,.brand p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.section-head{flex-wrap:wrap;row-gap:8px}
+.section-head .lead{flex:1 1 280px;flex-wrap:wrap;row-gap:2px}
+.section-head .lead .hint{min-width:0;overflow-wrap:anywhere;text-align:left}
+.section-head .actions{flex:0 0 auto;margin-left:auto}
+.section-head > .hint{flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+.set-label p{overflow-wrap:anywhere}
+.post-main .title-row{display:flex;align-items:center;gap:6px;min-width:0}
+.post-main .title-row b{min-width:0;flex:0 1 auto;font-weight:600;font-size:13.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.copy{flex:none;width:24px;height:24px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--ink-3);display:grid;place-items:center;cursor:pointer;transition:background .3s var(--ease),color .3s var(--ease),border-color .3s var(--ease)}
+.copy:hover{background:var(--blue-50);border-color:var(--blue-200);color:var(--blue-600)}
+.copy svg{width:13px;height:13px}
+.err-top .ttl{font-weight:600;overflow-wrap:anywhere}
+.load-error{padding:22px;display:flex;gap:14px;align-items:flex-start}
+.load-error b{display:block;font-size:14px}
+.load-error span{display:block;color:var(--ink-3);font-size:12.5px;margin-top:2px;overflow-wrap:anywhere}
+.load-error .btn{margin-top:10px}
+.live{max-width:52vw}
+.live span:last-child{overflow:hidden;text-overflow:ellipsis}
+
+/* v0.4.1：Safari 在插件页 iframe 里，对用 @property 自定义属性做的入场动画不会重绘起始位置，
+   会在元素下方 20px 处留下一层淡淡的"重影"文字。这里改成普通的 opacity/transform 入场动画，
+   效果一样；滚动渐隐仍然由脚本写入 --rv/--ry/--rs。 */
+.rv{opacity:var(--rv);transform:translate(0,var(--ry)) scale(var(--rs))}
+.rv.enter,.rv.card.enter{animation-name:enterRvSafe}
+@keyframes enterRvSafe{from{opacity:0;transform:translate(0,20px) scale(.97)}}
+@keyframes leave{to{opacity:0;transform:translate(0,-6px) scale(.97)}}
+.err-top .ep{display:inline-flex;align-items:center;gap:4px;min-width:0}
+.err-top .copy{width:22px;height:22px}
+.hero-meta{margin-top:6px}
