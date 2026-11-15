@@ -64,6 +64,44 @@ def _periods(hourly: dict[int, int], total: int, now: float) -> dict[str, int]:
     }
 
 
+CARD_FIELDS = {
+    "cover_url": str,
+    "icon_url": str,
+    "fee": int,
+    "adult": bool,
+    "excerpt": str,
+    "like_count": int,
+    "comment_count": int,
+    "published": str,
+    "tags": list,
+}
+
+
+def _card_fields(card: dict[str, Any] | None) -> dict[str, Any]:
+    """只留下画卡片需要的字段，并限制长度，免得 KV 越存越大。"""
+    out: dict[str, Any] = {}
+    if not isinstance(card, dict):
+        return out
+    for key, kind in CARD_FIELDS.items():
+        value = card.get(key)
+        if value is None:
+            continue
+        try:
+            if kind is str:
+                out[key] = str(value)[: 200 if key == "excerpt" else 400]
+            elif kind is int:
+                out[key] = int(value)
+            elif kind is bool:
+                out[key] = bool(value)
+            elif kind is list:
+                out[key] = (
+                    [str(v)[:40] for v in value][:6] if isinstance(value, list) else []
+                )
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 class Stats:
     def __init__(self, data: Any = None):
         d = data if isinstance(data, dict) else {}
@@ -228,13 +266,20 @@ class Stats:
         ok: bool,
         error: str = "",
         now: float | None = None,
+        card: dict[str, Any] | None = None,
+        test: bool = False,
     ) -> None:
+        """记一次推送。card 是插件页用来画 FANBOX 样式卡片的帖子信息（封面、头像、档位等）。
+
+        test=True 是插件页"测试推送"发的：只进推送记录（标成测试），不计入推送统计。
+        """
         now = time.time() if now is None else now
         series = "pushes" if ok else "push_failures"
-        self._bump(series, now)
-        c = self._creator(cid)
+        if not test:
+            self._bump(series, now)
+        c = self._creator(cid) if not test else self._load_creator({})
         c["counts"][series] += 1
-        if ok:
+        if ok and not test:
             h = _hour(now)
             c["hourly"]["pushes"][h] = c["hourly"]["pushes"].get(h, 0) + 1
             c["last_push_at"] = now
@@ -252,6 +297,8 @@ class Stats:
                 "style": style,
                 "ok": bool(ok),
                 "error": error,
+                **({"test": True} if test else {}),
+                **_card_fields(card),
             },
         )
         del self.pushes[LOG_LIMIT:]

@@ -11,7 +11,7 @@ from typing import Any
 from astrbot.api import logger
 from astrbot.api.web import error_response, json_response, request
 
-from .fanbox_api import FanboxError, FanboxNotFound
+from .fanbox_api import FanboxBlocked, FanboxError, FanboxNotFound
 from .fanbox_core import (
     DEFAULT_TEMPLATE,
     IMAGE_VARIABLES,
@@ -19,6 +19,7 @@ from .fanbox_core import (
     TEXT_VARIABLES,
     format_ts,
     parse_creator_id,
+    parse_post_ref,
     subscribed_at,
 )
 
@@ -63,6 +64,12 @@ class FanboxWebUI:
             ),
             ("check", self.check, ["POST"], "立即检查全部 FANBOX 订阅"),
             ("preview", self.preview, ["POST"], "预览推送效果"),
+            (
+                "preview/send",
+                self.preview_send,
+                ["POST"],
+                "把预览的消息测试推送到一个会话",
+            ),
         )
         for endpoint, handler, methods, desc in routes:
             context.register_web_api(
@@ -219,6 +226,7 @@ class FanboxWebUI:
                 "start_label": START_MODE_LABELS[mode],
                 "floor_text": p.describe_floor(),
                 "max_post_age_hours": s.max_post_age_hours,
+                "send_adult_cover": s.send_adult_cover,
                 "offset_hours": s.style.offset_hours,
                 "deployed_text": format_ts(p.deployed_at, s.style.offset_hours),
             },
@@ -327,20 +335,37 @@ class FanboxWebUI:
         payload = await self._payload()
         if payload is None:
             return error_response("请求内容必须是 JSON 对象", status_code=400)
-        cid = parse_creator_id(str(payload.get("creator") or ""))
+        # url 可以是帖子链接（预览指定帖子），也可以是创作者 ID / 主页链接（预览最新一篇）
+        cid, post_id = parse_post_ref(
+            str(payload.get("url") or payload.get("creator") or "")
+        )
         if cid is None:
-            return error_response("创作者 ID 或链接格式不正确", status_code=400)
+            return error_response(
+                "认不出这个链接。请填 FANBOX 帖子链接（例如 https://<ID>.fanbox.cc/posts/<帖子号>）或创作者 ID",
+                status_code=400,
+            )
         s, errors = self.plugin.preview_settings(payload.get("values"))
         if s is None:
             return error_response("；".join(errors), status_code=400)
+        t_fetch = time.monotonic()
         try:
-            post = await self.plugin.latest_post(cid)
+            post = await self.plugin.find_post(cid, post_id)
         except FanboxNotFound:
             return error_response(f"没找到 FANBOX 创作者：{cid}", status_code=404)
+        except FanboxBlocked:
+            return error_response(
+                "FANBOX 拒绝了请求（HTTP 403），请稍后再试", status_code=502
+            )
         except FanboxError:
             return error_response("FANBOX 暂时访问不了，请稍后再试", status_code=502)
         if post is None:
+            if post_id:
+                return error_response(
+                    f"在 {cid} 的公开帖子列表里没找到帖子 {post_id}（可能已删除，或链接不对）",
+                    status_code=404,
+                )
             return error_response("这位创作者还没有发过帖子", status_code=404)
+        fetch_ms = int((time.monotonic() - t_fetch) * 1000)
         t0 = time.monotonic()
         pieces = await self.plugin.build_pieces(
             post, post.creator_name, "发布了新帖", s
@@ -362,9 +387,48 @@ class FanboxWebUI:
         return json_response(
             {
                 "creator": cid,
-                "post": {"id": post.id, "title": post.title, "url": post.url},
+                "source": "post" if post_id else "latest",
+                "post": {
+                    "id": post.id,
+                    "title": post.title,
+                    "url": post.url,
+                    "creator_name": post.creator_name,
+                    "fee": post.fee,
+                    "adult": post.adult,
+                    "published": post.published,
+                },
                 "style": s.push_style,
                 "pieces": out,
+                "fetch_ms": fetch_ms,
                 "ms": int((time.monotonic() - t0) * 1000),
             }
+        )
+
+    async def preview_send(self):
+        """测试推送：按预览用的样式（含未保存的修改）把一篇帖子真的发到一个会话。"""
+        payload = await self._payload()
+        if payload is None:
+            return error_response("请求内容必须是 JSON 对象", status_code=400)
+        umo = self._session_from_payload(payload)
+        if umo is None:
+            return error_response("会话格式不正确", status_code=400)
+        cid, post_id = parse_post_ref(str(payload.get("url") or ""))
+        if cid is None:
+            return error_response("认不出这个 FANBOX 链接或创作者 ID", status_code=400)
+        s, errors = self.plugin.preview_settings(payload.get("values"))
+        if s is None:
+            return error_response("；".join(errors), status_code=400)
+        try:
+            post = await self.plugin.find_post(cid, post_id)
+        except FanboxNotFound:
+            return error_response(f"没找到 FANBOX 创作者：{cid}", status_code=404)
+        except FanboxError:
+            return error_response("FANBOX 暂时访问不了，请稍后再试", status_code=502)
+        if post is None:
+            return error_response("没找到这篇帖子", status_code=404)
+        error = await self.plugin.send_test(umo, post, s)
+        if error:
+            return error_response(f"发送失败：{error}", status_code=502)
+        return json_response(
+            {"sent": True, "umo": umo, "post_id": post.id, "style": s.push_style}
         )

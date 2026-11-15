@@ -124,5 +124,58 @@ def test_page_files_exist():
     assert html.index("/api/plugin/page/bridge-sdk.js") < html.index("./app.js")
     css = (page / "style.css").read_text("utf-8")
     assert "@keyframes enterRvSafe" in css  # Safari 重影修复
+    # v0.5.0：左上角分区切换、右侧章节栏、实时预览、推送记录卡片
+    for tab in ("overview", "records", "subs", "style", "settings"):
+        assert f'data-tab="{tab}"' in html and f'id="panel-{tab}"' in html
+    for needed in (
+        'id="chapters"',
+        'id="pvUrl"',
+        'id="previewDock"',
+        'id="recordView"',
+        'id="pvSend"',
+    ):
+        assert needed in html, needed
+    js = (page / "app.js").read_text("utf-8")
+    for needed in (
+        "function rebuildChapters",
+        "function runPreview",
+        "function fbCard",
+        "data-chapter",
+    ):
+        assert needed in js, needed
     for lang in ("zh-CN", "en-US"):
         assert (ROOT / ".astrbot-plugin" / "i18n" / f"{lang}.json").is_file()
+
+
+def test_page_uses_only_the_light_palette():
+    """插件页只用一种淡蓝 + 浅粉 + 暖浅灰（和 X 推送插件页、状态页统一），不能混进深蓝、深紫等深色。"""
+    import re
+
+    allowed = set(
+        "#f8f6f7 #f2eff1 #fcfbfb #ffffff #faf8f9 #ece8ea #e1dcdf #ebe6e9 #5a5458 #8a8387 #a29ba0 "
+        "#f6fafe #eaf4fc #d9ecfa #c1dff6 #a8d2f3 #8cc2ee #fef7fa #fdeef3 #fadbe5 #f6c3d4 #f0a0ba "
+        "#e4dfe2 #968e93 #fad9e3 #f6b3c8 #fef4f7 #fdeaf0 #fff".split()
+    )
+    allowed_rgba = (
+        "rgba(255,255,255",
+        "rgba(150,130,140",
+        "rgba(253,234,240",
+        "rgba(var(--veil)",
+    )
+    page = ROOT / "pages" / "dashboard"
+    bad = []
+    for name in ("style.css", "app.js", "index.html"):
+        for n, line in enumerate((page / name).read_text("utf-8").splitlines(), 1):
+            for m in re.finditer(
+                r"#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b|rgba?\([^)]*\)|hsla?\([^)]*\)",
+                line,
+            ):
+                v = m.group(0).lower().replace(" ", "")
+                if v in allowed or v.startswith(allowed_rgba):
+                    continue
+                if v == "#000" and "mask" in line:  # 只用作遮罩
+                    continue
+                bad.append(f"{name}:{n} {v}")
+            if re.search(r"--blue-[6-9]00", line):
+                bad.append(f"{name}:{n} 深色蓝阶")
+    assert not bad, bad

@@ -108,3 +108,68 @@ def test_forget_creator():
     st.record_check("a", "ok", 1, NOW)
     st.forget_creator("a")
     assert "a" not in st.summary(NOW)["creators"]
+
+
+def test_push_record_keeps_card_fields_and_limits_them():
+    st = Stats()
+    card = {
+        "cover_url": "https://pixiv.pximg.net/c/x.jpeg",
+        "icon_url": "https://pixiv.pximg.net/i.jpeg",
+        "fee": "500",
+        "adult": 1,
+        "excerpt": "あ" * 500,
+        "like_count": 12,
+        "published": "2026-11-13T21:12:00+09:00",
+        "tags": ["a"] * 20,
+        "unknown": "dropped",
+    }
+    st.record_push(
+        "a",
+        name="A",
+        post_id="1",
+        title="t",
+        post_url="u",
+        umo="p:GroupMessage:1",
+        style="card",
+        ok=True,
+        now=NOW,
+        card=card,
+    )
+    p = Stats(json.loads(json.dumps(st.to_dict()))).summary(NOW)["pushes"][0]
+    assert p["cover_url"].endswith("x.jpeg") and p["icon_url"].endswith("i.jpeg")
+    assert p["fee"] == 500 and p["adult"] is True and p["like_count"] == 12
+    assert len(p["excerpt"]) == 200 and len(p["tags"]) == 6
+    assert "unknown" not in p
+    # 没有卡片信息的旧记录也照常工作
+    st.record_push(
+        "a",
+        name="A",
+        post_id="2",
+        title="t",
+        post_url="u",
+        umo="p:GroupMessage:1",
+        style="text",
+        ok=True,
+        now=NOW,
+    )
+    assert "cover_url" not in st.pushes[0]
+
+
+def test_test_push_is_logged_but_not_counted():
+    st = Stats()
+    st.record_push(
+        "a",
+        name="A",
+        post_id="1",
+        title="t",
+        post_url="u",
+        umo="p:FriendMessage:1",
+        style="card",
+        ok=True,
+        now=NOW,
+        test=True,
+    )
+    s = st.summary(NOW)
+    assert s["series"]["pushes"]["periods"]["total"] == 0
+    assert "a" not in s["creators"]
+    assert s["pushes"][0]["test"] is True and s["pushes"][0]["ok"] is True

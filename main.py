@@ -74,6 +74,27 @@ def _post_brief(post: Post) -> dict[str, Any]:
     }
 
 
+def _card_info(post: Post) -> dict[str, Any]:
+    """推送记录里画 FANBOX 卡片用的信息。"""
+    return {
+        "cover_url": post.cover_url,
+        "icon_url": post.creator_icon_url,
+        "fee": post.fee,
+        "adult": post.adult,
+        "excerpt": post.excerpt,
+        "like_count": post.like_count,
+        "comment_count": post.comment_count,
+        "published": post.published,
+        "tags": post.tags,
+    }
+
+
+IMAGE_CACHE_TTL = 30 * 60
+IMAGE_CACHE_MAX = 60
+POST_CACHE_TTL = 5 * 60
+MAX_PAGES_TO_SEARCH = 30
+
+
 class FanboxPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -91,6 +112,9 @@ class FanboxPlugin(Star):
         self.last_poll_at = 0.0
         self.next_poll_at = 0.0
         self.last_poll_sent = 0
+        # 图片和帖子的短期缓存：实时预览频繁重画时不用每次都去 FANBOX 下载
+        self._image_cache: dict[str, tuple[float, bytes]] = {}
+        self._post_cache: dict[tuple[str, str], tuple[float, Post]] = {}
 
         self._lock = asyncio.Lock()
         self._config_lock = asyncio.Lock()
@@ -422,8 +446,19 @@ class FanboxPlugin(Star):
         if not url:
             return None
         if url not in cache:
+            hit = self._image_cache.get(url)
+            if hit and time.time() - hit[0] < IMAGE_CACHE_TTL:
+                cache[url] = hit[1]
+                return hit[1]
             try:
-                cache[url] = await self.api.download_image(url)
+                data = await self.api.download_image(url)
+                cache[url] = data
+                self._image_cache[url] = (time.time(), data)
+                if len(self._image_cache) > IMAGE_CACHE_MAX:
+                    oldest = min(
+                        self._image_cache, key=lambda k: self._image_cache[k][0]
+                    )
+                    self._image_cache.pop(oldest, None)
             except FanboxError as exc:
                 logger.warning(f"[FANBOX] 图片下载失败: {exc}")
                 self.stats.record_error("image_failed", str(exc), creator=creator)
@@ -521,6 +556,40 @@ class FanboxPlugin(Star):
             chain.append(Plain(value) if kind == "text" else Image.fromBytes(value))
         return chain
 
+    async def send_test(self, umo: str, post: Post, s: Settings) -> str:
+        """插件页"测试推送"：按给定样式把一篇帖子发到指定会话。返回错误说明，成功返回空字符串。
+
+        只记进推送记录（标成测试），不改订阅进度，也不计入推送统计。
+        """
+        name = post.creator_name or post.creator_id
+        chain = await self._build_chain(post, name, s=s)
+        error = ""
+        try:
+            ok = await self.context.send_message(umo, MessageChain(chain=chain))
+            if ok is False:
+                error = "找不到会话"
+        except Exception as exc:
+            error = str(exc) or exc.__class__.__name__
+        self.stats.record_push(
+            post.creator_id,
+            name=name,
+            post_id=post.id,
+            title=post.title,
+            post_url=post.url,
+            umo=umo,
+            style=s.push_style,
+            ok=not error,
+            error=error,
+            card=_card_info(post),
+            test=True,
+        )
+        await self._save_stats()
+        if error:
+            logger.warning(f"[FANBOX] 测试推送 {post.id} 到 {umo} 失败: {error}")
+        else:
+            logger.info(f"[FANBOX] 测试推送 {post.creator_id}/{post.id} 到 {umo}")
+        return error
+
     async def _send_post(self, umo: str, post: Post, name: str, s: Settings) -> bool:
         name = name or post.creator_name or post.creator_id
         chain = await self._build_chain(post, name, s=s)
@@ -538,6 +607,7 @@ class FanboxPlugin(Star):
             post_url=post.url,
             umo=umo,
             style=s.push_style,
+            card=_card_info(post),
         )
         if error:
             logger.warning(f"[FANBOX] 推送帖子 {post.id} 到 {umo} 失败: {error}")
@@ -553,6 +623,51 @@ class FanboxPlugin(Star):
     async def latest_post(self, cid: str) -> Post | None:
         posts = parse_posts(await self.api.list_posts(cid, LIST_LIMIT))
         return max(posts, key=lambda p: p.ts) if posts else None
+
+    def _cached_post(self, key: tuple[str, str]) -> Post | None:
+        hit = self._post_cache.get(key)
+        if hit and time.time() - hit[0] < POST_CACHE_TTL:
+            return hit[1]
+        return None
+
+    def _remember_post(self, key: tuple[str, str], post: Post) -> None:
+        self._post_cache[key] = (time.time(), post)
+        if len(self._post_cache) > 100:
+            oldest = min(self._post_cache, key=lambda k: self._post_cache[k][0])
+            self._post_cache.pop(oldest, None)
+
+    async def find_post(self, cid: str, post_id: str | None) -> Post | None:
+        """按帖子 ID 找帖子；没给 ID 就取最新一篇。
+
+        服务器上 post.info 会被 FANBOX 拦，所以从公开的帖子列表里找：
+        先看最新 10 篇，找不到再按 post.paginateCreator 给的分页地址往前翻（最多 30 页）。
+        结果缓存 5 分钟，实时预览反复重画时不用重复请求。
+        """
+        key = (cid, post_id or "")
+        cached = self._cached_post(key)
+        if cached is not None:
+            return cached
+        posts = parse_posts(await self.api.list_posts(cid, LIST_LIMIT))
+        found: Post | None = None
+        if post_id is None:
+            found = max(posts, key=lambda p: p.ts) if posts else None
+        else:
+            found = next((p for p in posts if p.id == post_id), None)
+            if found is None:
+                urls = await self.api.page_urls(cid)
+                for url in urls[1 : MAX_PAGES_TO_SEARCH + 1]:
+                    page = parse_posts(await self.api.list_posts_page(url))
+                    found = next((p for p in page if p.id == post_id), None)
+                    if found is not None or not page:
+                        break
+                    # 这一页最旧的帖子 ID 已经比要找的小，就不用再往后翻了
+                    if post_id.isdigit() and all(
+                        int(p.id) < int(post_id) for p in page
+                    ):
+                        break
+        if found is not None:
+            self._remember_post(key, found)
+        return found
 
     # ---------- 指令 ----------
 

@@ -47,6 +47,25 @@ def parse_creator_id(text: str | None) -> str | None:
     return None
 
 
+_POST_ID_RE = re.compile(r"/posts/(\d{1,12})(?:[/?#]|$)")
+
+
+def parse_post_ref(text: str | None) -> tuple[str | None, str | None]:
+    """从 FANBOX 链接里取出 (创作者 ID, 帖子 ID)。
+
+    支持 https://<ID>.fanbox.cc/posts/<帖子>、https://www.fanbox.cc/@<ID>/posts/<帖子>，
+    也支持只给创作者（ID、@ID、主页链接），这时帖子 ID 为 None。认不出来返回 (None, None)。
+    """
+    s = (text or "").strip().strip("<>").strip()
+    if not s:
+        return None, None
+    cid = parse_creator_id(s)
+    if cid is None:
+        return None, None
+    m = _POST_ID_RE.search(s)
+    return cid, (m.group(1) if m else None)
+
+
 def parse_timestamp(value: Any) -> float:
     """把 FANBOX 的 ISO 时间（带 +09:00）转成时间戳，失败返回 0。"""
     if not isinstance(value, str) or not value:
