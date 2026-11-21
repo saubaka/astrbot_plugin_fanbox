@@ -26,6 +26,7 @@ def test_defaults_build_cleanly():
     assert s.style.show_fee and s.style.offset_hours == 8
     assert s.card_text == "merge" and s.card_template == DEFAULT_CARD_TEMPLATE
     assert s.card_template_is_default
+    assert s.creator_cover_fallback  # 没封面时默认用创作者主页封面
 
 
 def test_card_text_settings():

@@ -103,6 +103,12 @@
         "type": "bool",
         "default": false,
         "hint": "默认关闭：R-18 帖子不发封面，卡片图里的封面换成“R-18 · 封面已隐藏”，避免在 QQ 群里发出成人图片。"
+      },
+      "creator_cover_fallback": {
+        "description": "帖子没有封面时用创作者主页封面",
+        "type": "bool",
+        "default": true,
+        "hint": "有的帖子作者没有设置封面，FANBOX 网页上只显示灰色占位图。打开后改用创作者主页的封面图（FANBOX 分享这类帖子时也是用它），卡片图和 {cover_image} 都会用上；关闭则卡片图显示灰色占位，{cover_image} 不发图。"
       }
     }
   },

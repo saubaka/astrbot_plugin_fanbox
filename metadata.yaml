@@ -1,7 +1,7 @@
 name: astrbot_plugin_fanbox
 display_name: FANBOX 新帖推送
 desc: 订阅 pixivFANBOX 创作者，有新帖时推送。可选文字模板（{变量} 完全自定义）或仿 FANBOX 网页样式的卡片图。只读取公开帖子列表，不登录，不转发付费内容。
-version: v0.7.0
+version: v0.7.1
 author: sau_baka
 repo: https://github.com/saubaka/astrbot_plugin_fanbox
 support_platforms:

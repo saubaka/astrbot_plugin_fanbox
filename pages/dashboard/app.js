@@ -631,7 +631,7 @@
     var schema = data.settings.schema; controls = {};
     var sf = $("styleForms"), gf = $("settingsForms"); sf.textContent = ""; gf.textContent = "";
     var items = schema.style.items, d = firstRender ? 80 : 0;
-    var styleRows = ["push_style", "card_text", "send_cover", "send_adult_cover"].filter(function (k) { return items[k]; }).map(function (k) { return buildControl("style", k, items[k]); });
+    var styleRows = ["push_style", "card_text", "send_cover", "send_adult_cover", "creator_cover_fallback"].filter(function (k) { return items[k]; }).map(function (k) { return buildControl("style", k, items[k]); });
     sf.appendChild(groupCard("ch-style", "推送样式", "发文字模板还是卡片图、卡片图怎么配文字，以及要不要附封面。改动后预览会自动更新。", "layers", styleRows, d));
     if (items.message_template) sf.appendChild(groupCard("ch-template", "推送模板", "推送样式为「文字模板」时使用。点下面的变量插入到光标处。", "text", [buildControl("style", "message_template", items.message_template)], d + 60));
     if (items.card_template) sf.appendChild(groupCard("ch-card-text", "卡片图配文", "推送样式为「卡片图」时的消息模板。{card_image} 就是卡片图本身，默认就有、不能删除；它上面的文字在卡片图上方，下面的（比如链接）在卡片图下方。合成一条还是分开发，在上面的「卡片图配文」里选。", "text", [buildControl("style", "card_template", items.card_template)], d + 90));

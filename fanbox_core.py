@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -102,6 +102,8 @@ class Post:
     like_count: int = 0
     comment_count: int = 0
     creator_icon_url: str = ""
+    # 帖子自己没有封面、改用了创作者主页封面时为 True
+    cover_from_creator: bool = False
 
     @property
     def url(self) -> str:
@@ -110,6 +112,30 @@ class Post:
     @property
     def creator_url(self) -> str:
         return f"https://{self.creator_id}.fanbox.cc"
+
+
+_PXIMG_SIZE_RE = re.compile(r"/c/\d+x\d+[^/]*/")
+
+
+def share_cover_url(url: str) -> str:
+    """把 pximg 图片地址换成 1200x630 的裁切版本（FANBOX 分享图用的尺寸，和卡片图封面比例一致）。"""
+    if not url or "pximg.net" not in url:
+        return url or ""
+    if _PXIMG_SIZE_RE.search(url):
+        return _PXIMG_SIZE_RE.sub("/c/1200x630_90_a2_g5/", url, count=1)
+    return url
+
+
+def with_creator_cover(post: Post, creator_cover_url: str) -> Post:
+    """帖子没有封面时，改用创作者主页的封面（FANBOX 分享没封面的帖子时也是这样）。
+
+    帖子自己有封面、或者拿不到主页封面时原样返回。
+    """
+    if post.cover_url or not creator_cover_url:
+        return post
+    return replace(
+        post, cover_url=share_cover_url(creator_cover_url), cover_from_creator=True
+    )
 
 
 def parse_post(raw: Any) -> Post | None:
@@ -387,12 +413,12 @@ TEXT_VARIABLES: dict[str, str] = {
     "timezone": "时区名称，例如“北京时间”（不受“显示时区”影响）",
     "like_count": "点赞数",
     "comment_count": "评论数",
-    "cover_url": "封面图链接（R-18 帖子在不允许发封面时为空）",
+    "cover_url": "封面图链接（帖子没设封面时按设置改用创作者主页封面；R-18 帖子在不允许发封面时为空）",
     "pinned": "置顶帖是“置顶”，否则为空",
 }
 
 IMAGE_VARIABLES: dict[str, str] = {
-    "cover_image": "封面图（关闭“附带封面图”，或 R-18 帖子不允许发封面时不发）",
+    "cover_image": "封面图（帖子没设封面时按设置改用创作者主页封面；关闭“附带封面图”，或 R-18 帖子不允许发封面时不发）",
     "card_image": "仿 FANBOX 网页样式的卡片图",
     "avatar_image": "创作者头像",
 }

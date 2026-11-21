@@ -13,7 +13,9 @@ from fanbox_core import (
     card_messages,
     ensure_card_element,
     render_template,
+    share_cover_url,
     unknown_variables,
+    with_creator_cover,
 )
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -237,3 +239,37 @@ def test_card_messages_ignores_other_images_and_keeps_card():
     # {card_image} 所在的条件行被删掉时，卡片图放在最后
     [message] = card_msgs("{title}\n?{card_image}{excerpt}")
     assert message == [("text", "テスト\n"), ("image", b"JPEG")]
+
+
+CREATOR_COVER = "https://pixiv.pximg.net/c/1620x580_90_a2_g5/fanbox/public/images/creator/1/cover/abc.jpeg"
+
+
+def test_share_cover_url_uses_the_1200x630_crop():
+    assert (
+        share_cover_url(CREATOR_COVER)
+        == "https://pixiv.pximg.net/c/1200x630_90_a2_g5/fanbox/public/images/creator/1/cover/abc.jpeg"
+    )
+    post_cover = "https://pixiv.pximg.net/c/1200x630_90_a2_g5/fanbox/public/images/post/1/cover/x.jpeg"
+    assert share_cover_url(post_cover) == post_cover
+    assert share_cover_url("https://example.com/a.jpeg") == "https://example.com/a.jpeg"
+    assert share_cover_url("") == ""
+
+
+def test_coverless_post_falls_back_to_creator_cover():
+    # FANBOX 列表里没设封面的帖子 cover 是 null
+    post = make_post(cover=None)
+    assert post.cover_url == "" and not post.cover_from_creator
+    fixed = with_creator_cover(post, CREATOR_COVER)
+    assert fixed.cover_from_creator
+    assert (
+        "/c/1200x630_90_a2_g5/" in fixed.cover_url
+        and "/creator/1/cover/" in fixed.cover_url
+    )
+    assert post.cover_url == ""  # 原对象不变
+    # 模板里的 {cover_url} 也跟着用主页封面
+    assert build_variables(fixed)["cover_url"] == fixed.cover_url
+    # 拿不到主页封面：原样返回
+    assert with_creator_cover(post, "") is post
+    # 帖子自己有封面：不替换
+    has_cover = make_post()
+    assert with_creator_cover(has_cover, CREATOR_COVER) is has_cover

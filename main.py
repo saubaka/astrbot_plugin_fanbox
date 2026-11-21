@@ -36,6 +36,7 @@ from .fanbox_core import (
     select_new_posts,
     start_floor,
     subscribed_at,
+    with_creator_cover,
 )
 from .fanbox_settings import (
     Settings,
@@ -101,6 +102,8 @@ def _card_info(post: Post) -> dict[str, Any]:
 IMAGE_CACHE_TTL = 30 * 60
 IMAGE_CACHE_MAX = 60
 POST_CACHE_TTL = 5 * 60
+CREATOR_COVER_TTL = 6 * 3600  # 创作者主页封面很少换，缓存 6 小时
+CREATOR_COVER_FAIL_TTL = 10 * 60
 MAX_PAGES_TO_SEARCH = 30
 
 
@@ -123,6 +126,7 @@ class FanboxPlugin(Star):
         self.last_poll_sent = 0
         # 图片和帖子的短期缓存：实时预览频繁重画时不用每次都去 FANBOX 下载
         self._image_cache: dict[str, tuple[float, bytes]] = {}
+        self._creator_cover_cache: dict[str, tuple[float, str]] = {}
         self._post_cache: dict[tuple[str, str], tuple[float, Post]] = {}
 
         self._lock = asyncio.Lock()
@@ -467,6 +471,32 @@ class FanboxPlugin(Star):
 
     # ---------- 生成消息 ----------
 
+    async def _creator_cover(self, cid: str) -> str:
+        """创作者主页的封面图地址（带缓存）。拿不到时返回空字符串。"""
+        hit = self._creator_cover_cache.get(cid)
+        if hit:
+            ttl = CREATOR_COVER_TTL if hit[1] else CREATOR_COVER_FAIL_TTL
+            if time.time() - hit[0] < ttl:
+                return hit[1]
+        url = ""
+        try:
+            body = await self.api.get_creator(cid)
+            raw = body.get("coverImageUrl")
+            url = raw if isinstance(raw, str) else ""
+        except FanboxError as exc:
+            logger.warning(f"[FANBOX] 读取 {cid} 的主页封面失败: {exc}")
+        self._creator_cover_cache[cid] = (time.time(), url)
+        return url
+
+    async def _with_cover(self, post: Post, s: Settings) -> Post:
+        """帖子没有封面时按设置改用创作者主页封面。"""
+        if post.cover_url or not s.creator_cover_fallback:
+            return post
+        fixed = with_creator_cover(post, await self._creator_cover(post.creator_id))
+        if fixed.cover_from_creator:
+            logger.info(f"[FANBOX] 帖子 {post.id} 没有封面，改用创作者主页封面")
+        return fixed
+
     def _cover_allowed(self, post: Post, s: Settings) -> bool:
         return bool(post.cover_url) and (s.send_adult_cover or not post.adult)
 
@@ -544,6 +574,7 @@ class FanboxPlugin(Star):
         s = s or self.s
         cache: dict[str, bytes | None] = {}
         name = name or post.creator_name or post.creator_id
+        post = await self._with_cover(post, s)
         if s.push_style == "card":
             try:
                 card = await self._render_card(post, name, cache, s)
@@ -632,6 +663,7 @@ class FanboxPlugin(Star):
         只记进推送记录（标成测试），不改订阅进度，也不计入推送统计。
         """
         name = post.creator_name or post.creator_id
+        post = await self._with_cover(post, s)
         error = await self._send_messages(
             umo, await self.build_messages(post, name, s=s)
         )
@@ -657,6 +689,7 @@ class FanboxPlugin(Star):
 
     async def _send_post(self, umo: str, post: Post, name: str, s: Settings) -> bool:
         name = name or post.creator_name or post.creator_id
+        post = await self._with_cover(post, s)
         error = await self._send_messages(
             umo, await self.build_messages(post, name, s=s)
         )

@@ -189,6 +189,7 @@ class Settings:
     card_template_is_default: bool = True
     send_cover: bool = True
     send_adult_cover: bool = False
+    creator_cover_fallback: bool = True
     style: StyleOptions = field(default_factory=StyleOptions)
     card_show_likes: bool = True
     card_excerpt_lines: int = 2
@@ -301,6 +302,7 @@ def build_settings(values: dict[str, dict[str, Any]]) -> tuple[Settings, list[st
         or raw_card_template == DEFAULT_CARD_TEMPLATE,
         send_cover=_bool(flat.get("send_cover"), True),
         send_adult_cover=_bool(flat.get("send_adult_cover"), False),
+        creator_cover_fallback=_bool(flat.get("creator_cover_fallback"), True),
         style=style,
         card_show_likes=_bool(flat.get("card_show_likes"), True),
         card_excerpt_lines=_int(
