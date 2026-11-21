@@ -14,7 +14,7 @@ R-18 帖子默认不发封面，卡片图上的封面会换成“R-18 · 封面�
 
 插件依赖 `httpx` 和 `Pillow`，AstrBot 已经自带。生成卡片图需要中日文字体，插件默认使用系统里的 Noto Sans CJK（Debian 和 Ubuntu 的软件包名为 `fonts-noto-cjk`），也可以在配置里指定其他字体文件。
 
-插件在 aiocqhttp（OneBot v11）平台上测试过。
+插件需要 AstrBot v4.26.0 或更高版本，在 aiocqhttp（OneBot v11）平台上测试过。
 
 ## 指令
 
