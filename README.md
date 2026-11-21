@@ -255,3 +255,7 @@ python -m json.tool _conf_schema.json
 ```
 
 `fanbox_core.py`、`fanbox_api.py`、`fanbox_card.py`、`fanbox_stats.py` 和 `fanbox_settings.py` 不依赖 AstrBot。`fanbox_webui.py` 是插件页的后端接口，`pages/dashboard/` 是前端页面。运行测试需要 `httpx`、`pytest` 和 `Pillow`，没有 Noto Sans CJK 字体时会跳过卡片图相关的测试。
+
+## 许可证
+
+本插件使用 MIT 许可证，详见 [LICENSE](LICENSE)。
