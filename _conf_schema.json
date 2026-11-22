@@ -96,7 +96,7 @@
         "description": "附带封面图",
         "type": "bool",
         "default": true,
-        "hint": "控制模板里的 {cover_image}。封面是 FANBOX 公开展示的图片，付费帖也有。卡片图不受此项影响。"
+        "hint": "控制模板里的 {cover_image}，付费帖也有封面。卡片图不受此项影响。"
       },
       "send_adult_cover": {
         "description": "R-18 帖子也附带封面图",
@@ -145,7 +145,7 @@
         "description": "摘要最多显示多少字",
         "type": "int",
         "default": 120,
-        "hint": "作用于 {excerpt}，填 0 不显示。付费帖未登录时摘要通常为空。"
+        "hint": "作用于 {excerpt}，填 0 不显示。付费帖通常没有摘要。"
       },
       "max_tags": {
         "description": "最多显示几个标签",

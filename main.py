@@ -2,7 +2,6 @@
 AstrBot FANBOX 新帖推送插件
 
 订阅 pixivFANBOX 创作者，有新帖时推送到订阅的会话。
-只读取 FANBOX 公开的帖子列表，不登录，也不转发付费内容。
 """
 
 from __future__ import annotations
@@ -732,7 +731,7 @@ class FanboxPlugin(Star):
     async def find_post(self, cid: str, post_id: str | None) -> Post | None:
         """按帖子 ID 找帖子；没给 ID 就取最新一篇。
 
-        服务器上 post.info 会被 FANBOX 拦，所以从公开的帖子列表里找：
+        在创作者的帖子列表里找：
         先看最新 10 篇，找不到再按 post.paginateCreator 给的分页地址往前翻（最多 30 页）。
         结果缓存 5 分钟，实时预览反复重画时不用重复请求。
         """
