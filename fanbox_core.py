@@ -372,13 +372,12 @@ DEFAULT_TEMPLATE = """【FANBOX】{creator_name} {headline}
 {cover_image}"""
 
 # 推送样式为“卡片图”时的消息模板。{card_image} 是卡片图本身，必须保留且只能有一个：
-# 写在它上面的文字在卡片图上方，写在它下面的文字在卡片图下方。卡片图里已经有封面、摘要和标签，
-# 所以默认只在上面放标题、在下面放链接。
+# 写在它上面的文字在卡片图上方，写在它下面的文字在卡片图下方。卡片图里已经有标题、封面、摘要和标签，
+# 所以默认只在上面放作者名和一句提示。
 CARD_ELEMENT = "{card_image}"
-DEFAULT_CARD_TEMPLATE = """【FANBOX】{creator_name} {headline}
-《{title}》
-{card_image}
-{post_url}"""
+DEFAULT_CARD_TEMPLATE = """{creator_name}
+发布了新的FANBOX文章：
+{card_image}"""
 
 # 卡片图配文的发法：只发卡片图 / 文字和卡片图合成一条消息 / 文字和卡片图分两条发
 CARD_TEXT_MODES = ("none", "merge", "separate")

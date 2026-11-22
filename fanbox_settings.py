@@ -38,6 +38,8 @@ except ImportError:  # 测试时作为顶层模块导入
 
 SCHEMA_PATH = Path(__file__).with_name("_conf_schema.json")
 PUSH_STYLES = ("text", "card")
+DEFAULT_PUSH_STYLE = "card"
+DEFAULT_TIMEZONE_OFFSET = 9  # 日本时间，和 FANBOX 网页一致
 
 # 数字配置的取值范围（闭区间）；None 表示不限
 INT_RANGES: dict[str, tuple[int | None, int | None]] = {
@@ -157,7 +159,7 @@ def validate(
     start = merged.get("start", {})
     content = merged.get("content", {})
     if start.get("start_from") == "custom":
-        offset = content.get("timezone_offset_hours", 8)
+        offset = content.get("timezone_offset_hours", DEFAULT_TIMEZONE_OFFSET)
         if parse_start_time(start.get("start_time", ""), int(offset or 0)) is None:
             errors.append("自定义起点时间：格式不对，例如 2026-11-15 08:00")
     card_tpl = merged.get("style", {}).get("card_template") or ""
@@ -181,13 +183,13 @@ class Settings:
     start_time_text: str = ""
     custom_start_ts: float | None = None
     max_post_age_hours: int = 0
-    push_style: str = "text"
+    push_style: str = DEFAULT_PUSH_STYLE
     template: str = DEFAULT_TEMPLATE
     template_is_default: bool = True
     card_text: str = "merge"
     card_template: str = DEFAULT_CARD_TEMPLATE
     card_template_is_default: bool = True
-    send_cover: bool = True
+    send_cover: bool = False
     send_adult_cover: bool = False
     creator_cover_fallback: bool = True
     style: StyleOptions = field(default_factory=StyleOptions)
@@ -230,10 +232,10 @@ def build_settings(values: dict[str, dict[str, Any]]) -> tuple[Settings, list[st
         flat.update(group)
     warnings: list[str] = []
 
-    push_style = _str(flat.get("push_style", "text")).strip().lower()
+    push_style = _str(flat.get("push_style", DEFAULT_PUSH_STYLE)).strip().lower()
     if push_style not in PUSH_STYLES:
-        warnings.append(f"未知的推送样式 {push_style!r}，改用 text")
-        push_style = "text"
+        warnings.append(f"未知的推送样式 {push_style!r}，改用 {DEFAULT_PUSH_STYLE}")
+        push_style = DEFAULT_PUSH_STYLE
     raw_template = _str(flat.get("message_template", ""))
     template = raw_template or DEFAULT_TEMPLATE
     bad = unknown_variables(template)
@@ -258,10 +260,12 @@ def build_settings(values: dict[str, dict[str, Any]]) -> tuple[Settings, list[st
     style = StyleOptions(
         excerpt_max=_int(flat.get("excerpt_max_chars", 120), 120, "excerpt_max_chars"),
         offset_hours=_int(
-            flat.get("timezone_offset_hours", 8), 8, "timezone_offset_hours"
+            flat.get("timezone_offset_hours", DEFAULT_TIMEZONE_OFFSET),
+            DEFAULT_TIMEZONE_OFFSET,
+            "timezone_offset_hours",
         ),
         show_fee=_bool(flat.get("show_fee"), True),
-        show_timezone=_bool(flat.get("show_timezone"), True),
+        show_timezone=_bool(flat.get("show_timezone"), False),
         show_tags=_bool(flat.get("show_tags"), True),
         show_adult_mark=_bool(flat.get("show_adult_mark"), True),
         time_format=_str(flat.get("time_format")) or "%Y-%m-%d %H:%M",
@@ -300,7 +304,7 @@ def build_settings(values: dict[str, dict[str, Any]]) -> tuple[Settings, list[st
         card_template=card_template,
         card_template_is_default=(not raw_card_template)
         or raw_card_template == DEFAULT_CARD_TEMPLATE,
-        send_cover=_bool(flat.get("send_cover"), True),
+        send_cover=_bool(flat.get("send_cover"), False),
         send_adult_cover=_bool(flat.get("send_adult_cover"), False),
         creator_cover_fallback=_bool(flat.get("creator_cover_fallback"), True),
         style=style,

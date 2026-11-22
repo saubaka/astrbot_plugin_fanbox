@@ -173,7 +173,7 @@ def card_msgs(template, mode="merge", card=b"JPEG"):
     return card_messages(pieces, card, mode)
 
 
-def test_card_template_default_has_card_element_between_title_and_link():
+def test_card_template_default_puts_text_above_the_card():
     assert unknown_variables(DEFAULT_CARD_TEMPLATE) == []
     assert DEFAULT_CARD_TEMPLATE.count("{card_image}") == 1
     schema = json.loads((ROOT / "_conf_schema.json").read_text("utf-8"))
@@ -182,11 +182,12 @@ def test_card_template_default_has_card_element_between_title_and_link():
     assert items["card_template"]["type"] == "text"
     assert items["card_text"]["default"] == "merge"
     assert sorted(items["card_text"]["options"]) == sorted(CARD_TEXT_MODES)
-    # 默认：标题在卡片图上方、链接在卡片图下方，同一条消息
+    # 默认：作者名和一句提示在卡片图上方，同一条消息
     [message] = card_msgs(DEFAULT_CARD_TEMPLATE)
-    assert [k for k, _ in message] == ["text", "image", "text"]
-    assert message[0][1].endswith("《テスト》\n")
-    assert message[2][1] == "\nhttps://creator-a.fanbox.cc/posts/100"
+    assert message == [
+        ("text", "サンプル作者\n发布了新的FANBOX文章：\n"),
+        ("image", b"JPEG"),
+    ]
 
 
 def test_ensure_card_element():

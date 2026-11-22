@@ -2,7 +2,7 @@ name: astrbot_plugin_fanbox
 display_name: FANBOX 新帖推送
 short_desc: 订阅 pixivFANBOX 创作者，有新帖时推送到群聊或私聊。
 desc: 订阅 pixivFANBOX 的创作者，有新帖时推送到订阅所在的群聊或私聊。推送可以是按模板生成的文字消息，也可以是仿照 FANBOX 网页样式的卡片图，卡片图上下还能配文字。附带插件页，可以查看推送记录、修改全部设置，并实时预览推送效果。
-version: v0.7.4
+version: v0.8.0
 author: sau_baka
 repo: https://github.com/saubaka/astrbot_plugin_fanbox
 astrbot_version: ">=4.26.0"

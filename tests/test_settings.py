@@ -21,9 +21,11 @@ def defaults():
 def test_defaults_build_cleanly():
     s, warnings = build_settings(defaults())
     assert warnings == []
-    assert s.poll_interval == 10 and s.push_style == "text" and s.start_from == "deploy"
+    # 默认样式就是作者服务器上正在用的那一套：卡片图、日本时间、不带时区名、文字模板不附封面
+    assert s.poll_interval == 10 and s.push_style == "card" and s.start_from == "deploy"
     assert s.template == DEFAULT_TEMPLATE and s.template_is_default
-    assert s.style.show_fee and s.style.offset_hours == 8
+    assert s.style.show_fee and s.style.offset_hours == 9 and not s.style.show_timezone
+    assert not s.send_cover and not s.send_adult_cover
     assert s.card_text == "merge" and s.card_template == DEFAULT_CARD_TEMPLATE
     assert s.card_template_is_default
     assert s.creator_cover_fallback  # 没封面时默认用创作者主页封面
@@ -136,7 +138,7 @@ def test_build_settings_falls_back_with_warnings():
     vals["start"]["start_time"] = ""
     vals["basic"]["poll_interval_minutes"] = 1
     s, warnings = build_settings(vals)
-    assert s.push_style == "text" and s.poll_interval == 5
+    assert s.push_style == "card" and s.poll_interval == 5
     assert len(warnings) == 3
 
 
@@ -191,6 +193,8 @@ def test_page_files_exist():
         "res.messages",
         "把卡片图移到光标处",
         "keepFirstCard",
+        "function setShown",
+        "PAGE_HINTS",
         "data-chapter",
     ):
         assert needed in js, needed
@@ -230,3 +234,23 @@ def test_page_uses_only_the_light_palette():
             if re.search(r"--blue-[6-9]00", line):
                 bad.append(f"{name}:{n} 深色蓝阶")
     assert not bad, bad
+
+
+def test_native_settings_show_only_the_selected_style():
+    """AstrBot 原生设置页：按推送样式只显示对应的设置；下拉框有中文显示名；第一组有醒目提示。"""
+    import json
+
+    raw = json.loads((ROOT / "_conf_schema.json").read_text("utf-8"))
+    style = raw["style"]["items"]
+    for key in ("message_template", "send_cover"):
+        assert style[key]["condition"] == {"push_style": "text"}, key
+    for key in ("card_text", "card_template"):
+        assert style[key]["condition"] == {"push_style": "card"}, key
+    assert raw["card"]["condition"] == {"style.push_style": "card"}
+    assert raw["start"]["items"]["start_time"]["condition"] == {"start_from": "custom"}
+    for group in raw.values():
+        for key, item in group["items"].items():
+            if "labels" in item:
+                assert len(item["labels"]) == len(item["options"]), key
+    assert raw["basic"]["obvious_hint"] is True and "插件页面" in raw["basic"]["hint"]
+    assert list(raw)[0] == "basic"  # 醒目提示在最上面一组

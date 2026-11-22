@@ -536,16 +536,51 @@
     Object.keys(controls).forEach(function (id) { var c = controls[id]; c.row.classList.toggle("changed", JSON.stringify(draft[c.g][c.k]) !== JSON.stringify(savedValues[c.g][c.k])); });
     updateStartRows();
   }
-  function setDraft(g, k, v) { draft[g][k] = v; refreshDirty(); if (g === "style") updateStyleRows(); if (STYLE_GROUPS.indexOf(g) >= 0) schedulePreview(450); }
+  function setDraft(g, k, v) { draft[g][k] = v; refreshDirty(); if (g === "style") updateStyleRows(); if (g === "start") updateStartRows(); if (STYLE_GROUPS.indexOf(g) >= 0) schedulePreview(450); }
+  // 显示/隐藏一块设置：隐藏时淡出并收起高度，出现时展开并淡入；首次渲染不做动画
+  function setShown(el, show, animate) {
+    if (!el) return false;
+    var visible = !el.hidden && !el._leaving;
+    if (visible === show) return false;
+    if (el._anim) { el._anim.cancel(); el._anim = null; el.style.overflow = ""; }
+    if (!animate || reduce || typeof el.animate !== "function") { el.hidden = !show; el._leaving = false; return true; }
+    var collapsed = { height: "0px", paddingTop: "0px", paddingBottom: "0px", marginTop: "0px", marginBottom: "0px" };
+    if (show) {
+      el.hidden = false; el._leaving = false;
+      var cs = getComputedStyle(el);
+      var open = { opacity: 1, transform: "none", height: el.offsetHeight + "px", paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom, marginTop: cs.marginTop, marginBottom: cs.marginBottom };
+      el.style.overflow = "hidden";
+      el._anim = el.animate([Object.assign({ opacity: 0, transform: "translateY(14px) scale(.98)" }, collapsed), open], { duration: 520, easing: EASE });
+      el._anim.onfinish = function () { el._anim = null; el.style.overflow = ""; measureSoon(); };
+    } else {
+      var cs2 = getComputedStyle(el);
+      var from = { opacity: 1, transform: "none", height: el.offsetHeight + "px", paddingTop: cs2.paddingTop, paddingBottom: cs2.paddingBottom, marginTop: cs2.marginTop, marginBottom: cs2.marginBottom };
+      el._leaving = true; el.style.overflow = "hidden";
+      el._anim = el.animate([from, Object.assign({ opacity: 0, transform: "translateY(-10px) scale(.98)" }, collapsed)], { duration: 400, easing: EASE });
+      el._anim.onfinish = function () { el.hidden = true; el._leaving = false; el._anim = null; el.style.overflow = ""; rebuildChapters(); measureSoon(); };
+    }
+    return true;
+  }
+  var styleRowsReady = false;
+  // 只显示当前推送样式用得到的设置：卡片图 → 卡片图配文、卡片图外观；文字模板 → 推送模板、附带封面图
   function updateStyleRows() {
-    if (!draft.style) return; var card = draft.style.push_style === "card";
-    var ct = controls["style.card_text"]; if (ct) { ct.row.style.opacity = card ? "" : ".55"; if (ct.extra) ct.extra.textContent = !card ? "推送样式是「文字模板」时不起作用" : draft.style.card_text === "merge" ? "一条消息：按配文模板的顺序，卡片图上下都可以放文字" : draft.style.card_text === "separate" ? "按卡片图切开：上方文字、卡片图、下方文字各发一条" : "不发文字，只发卡片图"; }
-    var tc = controls["style.card_template"]; if (tc) tc.row.style.opacity = card && draft.style.card_text !== "none" ? "" : ".55";
-    var mt = controls["style.message_template"]; if (mt) mt.row.style.opacity = card ? ".55" : "";
+    if (!draft.style || !controls["style.push_style"]) return;
+    var animate = styleRowsReady, card = draft.style.push_style === "card", mode = draft.style.card_text;
+    var tpl = draft.style.message_template || (data && data.template ? data.template["default"] : "") || "";
+    var ct = controls["style.card_text"];
+    if (ct) { setShown(ct.row, card, animate); if (ct.extra) ct.extra.textContent = mode === "merge" ? "一条消息：按配文模板的顺序，卡片图上下都可以放文字" : mode === "separate" ? "按卡片图切开：上方文字、卡片图、下方文字各发一条" : "不发文字，只发卡片图"; }
+    var sc = controls["style.send_cover"]; if (sc) setShown(sc.row, !card, animate);
+    var changed = false;
+    changed = setShown($("ch-template"), !card, animate) || changed;
+    changed = setShown($("ch-card-text"), card && mode !== "none", animate) || changed;
+    changed = setShown($("ch-card"), card || tpl.indexOf("{card_image}") >= 0, animate) || changed;  // 文字模板里用了卡片图时也要能调外观
+    styleRowsReady = true;
+    if (changed) { rebuildChapters(); measureSoon(); }
   }
   function updateStartRows() {
+    var anim = styleRowsReady;  // 第一次（刚建好设置表单时）不做动画
     updateStyleRows();
-    var c = controls["start.start_time"]; if (!c) return; c.row.style.opacity = draft.start.start_from === "custom" ? "" : ".55";
+    var c = controls["start.start_time"]; if (!c) return; setShown(c.row, draft.start.start_from === "custom", anim);
     var ex = controls["start.start_from"]; if (ex && ex.extra) ex.extra.textContent = draft.start.start_from === "deploy" && data ? ("部署时间：" + data.plugin.deployed_text) : draft.start.start_from === "subscribe" ? "每个订阅各自从订阅那一刻开始" : "按下面填写的时间";
   }
   function buildControl(g, k, item) {
@@ -594,6 +629,7 @@
         prev = ta.value;
       }
       draft[g][k] = ta.value === def ? "" : ta.value; refreshDirty(); schedulePreview(600);
+      if (k === "message_template") updateStyleRows();  // 模板里加上或去掉 {card_image} 时，卡片图外观那组跟着出现或收起
     });
     wrap.appendChild(ta);
     if (isCard) { lockNote = el("div", "tpl-lock"); lockNote.hidden = true; lockNote.setAttribute("role", "status"); wrap.appendChild(lockNote); }
@@ -627,16 +663,17 @@
     var head = el("div", "set-head"); head.appendChild(iconEl(icon, "ic")); var ht = el("div", ""); ht.appendChild(el("h3", "", title)); if (hint) ht.appendChild(el("p", "", hint)); head.appendChild(ht); card.appendChild(head);
     rows.forEach(function (r) { card.appendChild(r); }); return card;
   }
+  var PAGE_HINTS = { basic: "轮询频率和网络。", card: "卡片图的外观。推送样式为卡片图，或推送模板里用到 {card_image} 时显示。" };
   function buildSettings() {
     var schema = data.settings.schema; controls = {};
     var sf = $("styleForms"), gf = $("settingsForms"); sf.textContent = ""; gf.textContent = "";
     var items = schema.style.items, d = firstRender ? 80 : 0;
     var styleRows = ["push_style", "card_text", "send_cover", "send_adult_cover", "creator_cover_fallback"].filter(function (k) { return items[k]; }).map(function (k) { return buildControl("style", k, items[k]); });
-    sf.appendChild(groupCard("ch-style", "推送样式", "发文字模板还是卡片图、卡片图怎么配文字，以及要不要附封面。改动后预览会自动更新。", "layers", styleRows, d));
-    if (items.message_template) sf.appendChild(groupCard("ch-template", "推送模板", "推送样式为「文字模板」时使用。点下面的变量插入到光标处。", "text", [buildControl("style", "message_template", items.message_template)], d + 60));
+    sf.appendChild(groupCard("ch-style", "推送样式", "先选推送样式，下面只显示这种样式用得到的设置，另一种样式的设置会自动收起。改动后预览会自动更新。", "layers", styleRows, d));
+    if (items.message_template) sf.appendChild(groupCard("ch-template", "推送模板", "点下面的变量插入到光标处；用到 {card_image} 时，下面会出现卡片图外观的设置。", "text", [buildControl("style", "message_template", items.message_template)], d + 60));
     if (items.card_template) sf.appendChild(groupCard("ch-card-text", "卡片图配文", "推送样式为「卡片图」时的消息模板。{card_image} 就是卡片图本身，默认就有、不能删除；它上面的文字在卡片图上方，下面的（比如链接）在卡片图下方。合成一条还是分开发，在上面的「卡片图配文」里选。", "text", [buildControl("style", "card_template", items.card_template)], d + 90));
-    ["content", "card"].forEach(function (g, i) { var body = schema[g]; if (!body) return; sf.appendChild(groupCard("ch-" + g, body.description || g, body.hint || "", GROUP_ICON[g], Object.keys(body.items).map(function (k) { return buildControl(g, k, body.items[k]); }), d + 120 + i * 60)); });
-    SETTINGS_GROUPS.forEach(function (g, i) { var body = schema[g]; if (!body) return; gf.appendChild(groupCard("ch-" + g, body.description || g, body.hint || "", GROUP_ICON[g], Object.keys(body.items).map(function (k) { return buildControl(g, k, body.items[k]); }), d + i * 60)); });
+    ["content", "card"].forEach(function (g, i) { var body = schema[g]; if (!body) return; sf.appendChild(groupCard("ch-" + g, body.description || g, PAGE_HINTS[g] || body.hint || "", GROUP_ICON[g], Object.keys(body.items).map(function (k) { return buildControl(g, k, body.items[k]); }), d + 120 + i * 60)); });
+    SETTINGS_GROUPS.forEach(function (g, i) { var body = schema[g]; if (!body) return; gf.appendChild(groupCard("ch-" + g, body.description || g, PAGE_HINTS[g] || body.hint || "", GROUP_ICON[g], Object.keys(body.items).map(function (k) { return buildControl(g, k, body.items[k]); }), d + i * 60)); });
     settingsBuilt = true;
   }
   function renderSettings() {

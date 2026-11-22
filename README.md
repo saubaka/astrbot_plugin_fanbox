@@ -59,7 +59,7 @@ R-18 帖子默认不发封面，卡片图上的封面会换成“R-18 · 封面�
 | 概览 | 近 24 小时的推送数和每小时趋势，以及订阅的创作者数、检查次数、下次检查倒计时、近 7 天推送数、报错数和总推送数。每位创作者有一张卡片，显示推送篇数、检查结果、每小时的检查情况和最新帖子，点“预览样式”可以直接跳到实时预览。 |
 | 推送记录 | 默认用 FANBOX 网页的帖子卡片样式展示，封面左下角标明推送到了哪个会话、使用的样式以及是否送达。记录按天分组，也可以切换成列表。下方是最近的报错。 |
 | 订阅 | 可以从 QQ 群列表里选群添加订阅，也可以填 QQ 号订阅私聊。每个会话单独一块，可以预览或取消订阅。 |
-| 推送样式 | 包括推送样式、推送模板、卡片图配文、显示内容和卡片图五组设置，模板里的变量点一下就能插入。右侧是实时预览，窄屏时排在设置下方。填入帖子链接（`https://<ID>.fanbox.cc/posts/<帖子号>`）或创作者 ID 后，修改任何一项设置都会按新样式重新生成，未保存的修改也会体现在预览里，预览中的一个气泡就是 QQ 里的一条消息。预览下方可以测试推送，把这条消息实际发到选定的会话或私聊，需要点两次确认。测试推送不影响订阅进度，不计入统计，在推送记录里会标为“测试”。 |
+| 推送样式 | 选好推送样式后，下面只显示这种样式用得到的设置：文字模板对应推送模板，卡片图对应卡片图配文和卡片图外观，切换时会有过渡动画。模板里的变量点一下就能插入。右侧是实时预览，窄屏时排在设置下方。填入帖子链接（`https://<ID>.fanbox.cc/posts/<帖子号>`）或创作者 ID 后，修改任何一项设置都会按新样式重新生成，未保存的修改也会体现在预览里，预览中的一个气泡就是 QQ 里的一条消息。预览下方可以测试推送，把这条消息实际发到选定的会话或私聊，需要点两次确认。测试推送不影响订阅进度，不计入统计，在推送记录里会标为“测试”。 |
 | 设置 | 基础设置和推送起点。 |
 
 设置保存后立即生效，不需要重启，修改轮询间隔后会马上按新的间隔重新计时。
@@ -88,7 +88,7 @@ AstrBot 的插件页运行在受限的 iframe 里，不能打开新窗口，所�
 
 ## 配置
 
-配置分为 5 组，可以在 AstrBot 面板或插件页里修改。
+配置分为 5 组，可以在插件页或 AstrBot 自带的插件设置里修改。插件设置同样只显示当前推送样式用得到的项，但没有订阅管理、实时预览和测试推送，建议使用插件页。
 
 **基础设置**
 
@@ -110,11 +110,11 @@ AstrBot 的插件页运行在受限的 iframe 里，不能打开新窗口，所�
 
 | 配置项 | 默认值 | 说明 |
 |---|---|---|
-| `push_style` | text | `text` 按推送模板发送；`card` 按卡片图配文模板发送卡片图，卡片图生成失败时改为按推送模板发送 |
+| `push_style` | card | `text` 按推送模板发送；`card` 按卡片图配文模板发送卡片图，卡片图生成失败时改为按推送模板发送 |
 | `card_text` | merge | 卡片图的配文方式，只在 `card` 样式下生效。`merge` 按配文模板的顺序把文字和卡片图合成一条消息，`separate` 以卡片图为界把上方文字、卡片图和下方文字分开发送，`none` 只发卡片图 |
 | `message_template` | 见下文 | 推送模板，`text` 样式使用，清空即恢复默认 |
 | `card_template` | 见下文 | 卡片图配文模板，`card` 样式使用，必须保留一个 `{card_image}`，清空即恢复默认 |
-| `send_cover` | 开 | 控制模板里的 `{cover_image}` 是否发送 |
+| `send_cover` | 关 | 文字模板样式下，控制模板里的 `{cover_image}` 是否发送 |
 | `send_adult_cover` | 关 | R-18 帖子也发送封面，卡片图里也显示真实封面 |
 | `creator_cover_fallback` | 开 | 帖子没有设置封面时，改用创作者主页的封面图，FANBOX 分享这类帖子时也是这样做的。对卡片图和 `{cover_image}` 都生效，关闭后卡片图会显示灰色占位图 |
 
@@ -123,13 +123,13 @@ AstrBot 的插件页运行在受限的 iframe 里，不能打开新窗口，所�
 | 配置项 | 默认值 | 说明 |
 |---|---|---|
 | `show_fee` | 开 | 显示付费档位 |
-| `show_timezone` | 开 | 在时间后面加上“（北京时间）”这样的时区名称 |
+| `show_timezone` | 关 | 在时间后面加上“（日本时间）”这样的时区名称 |
 | `show_tags` | 开 | 显示标签 |
 | `show_adult_mark` | 开 | 显示 R-18 标记 |
 | `excerpt_max_chars` | 120 | `{excerpt}` 的最大长度，设为 0 则不显示 |
 | `max_tags` | 6 | 最多显示几个标签 |
 | `time_format` | `%Y-%m-%d %H:%M` | `{published}` 和 `{updated}` 的时间格式（strftime 写法） |
-| `timezone_offset_hours` | 8 | 时区，8 表示北京时间，9 表示日本时间 |
+| `timezone_offset_hours` | 9 | 时区，9 表示日本时间（和 FANBOX 网页一致），8 表示北京时间 |
 
 **卡片图**
 
@@ -159,16 +159,15 @@ AstrBot 的插件页运行在受限的 iframe 里，不能打开新窗口，所�
 
 ### 卡片图配文模板
 
-推送样式为 `card` 时使用这个模板。模板里的 `{card_image}` 就是卡片图本身，必须保留，而且只能有一个。插件页的编辑器里删不掉它；如果模板里没有，插件会自动把它补在末尾。写在 `{card_image}` 上面的文字显示在卡片图上方，写在下面的文字显示在卡片图下方。其他变量和写法规则与推送模板相同，但其他图片变量在这里会被忽略，因为卡片图里已经有封面和头像。默认模板在卡片图上方放标题，下方放链接：
+推送样式为 `card` 时使用这个模板。模板里的 `{card_image}` 就是卡片图本身，必须保留，而且只能有一个。插件页的编辑器里删不掉它；如果模板里没有，插件会自动把它补在末尾。写在 `{card_image}` 上面的文字显示在卡片图上方，写在下面的文字显示在卡片图下方。其他变量和写法规则与推送模板相同，但其他图片变量在这里会被忽略，因为卡片图里已经有封面和头像。默认模板在卡片图上方放作者名和一句提示：
 
 ```
-【FANBOX】{creator_name} {headline}
-《{title}》
+{creator_name}
+发布了新的FANBOX文章：
 {card_image}
-{post_url}
 ```
 
-`card_text` 选择 `merge` 时，上面这些内容在 QQ 里是一条消息，标题在上，卡片图在中间，链接在卡片图下方。选择 `separate`（插件页里叫“分开发”）时，会以卡片图为界分开，上方文字、卡片图和下方文字各发一条。选择 `none` 时只发卡片图，不使用模板。
+`card_text` 选择 `merge` 时，上面这些内容在 QQ 里是一条消息，文字在上，卡片图在下。想在卡片图下方放帖子链接，在 `{card_image}` 下面加一行 `{post_url}` 即可。选择 `separate`（插件页里叫“分开发”）时，会以卡片图为界分开，上方文字、卡片图和下方文字各发一条。选择 `none` 时只发卡片图，不使用模板。
 
 在插件页里，可以用“把卡片图移到光标处”按钮调整卡片图在模板里的位置。
 
@@ -208,12 +207,12 @@ AstrBot 的插件页运行在受限的 iframe 里，不能打开新窗口，所�
 | `{tags}` | 标签，写成“#标签1 #标签2”，关闭“显示标签”时为空 | `#イラスト #メイキング` |
 | `{tags_plain}` | 标签，用顿号连接成“标签1、标签2”，关闭“显示标签”时为空 | `イラスト、メイキング` |
 | `{tag_count}` | 标签个数 | `2` |
-| `{published}` | 发布时间，按“时间格式”和时区显示，开启“显示时区”时后面带“（北京时间）” | `2026-11-13 20:12（北京时间）` |
+| `{published}` | 发布时间，按“时间格式”和时区显示，开启“显示时区”时后面带“（北京时间）” | `2026-11-13 21:12` |
 | `{published_date}` | 发布日期，例如 2026-11-13 | `2026-11-13` |
-| `{published_time}` | 发布时刻，例如 20:12 | `20:12` |
+| `{published_time}` | 发布时刻，例如 20:12 | `21:12` |
 | `{published_iso}` | FANBOX 原始的发布时间，日本时间的 ISO 格式 | `2026-11-13T21:12:54+09:00` |
-| `{updated}` | 最后更新时间，格式和 published 相同 | `2026-11-14 08:30（北京时间）` |
-| `{timezone}` | 时区名称，例如“北京时间”，不受“显示时区”影响 | `北京时间` |
+| `{updated}` | 最后更新时间，格式和 published 相同 | `2026-11-14 09:30` |
+| `{timezone}` | 时区名称，例如“北京时间”，不受“显示时区”影响 | `日本时间` |
 | `{like_count}` | 点赞数 | `12` |
 | `{comment_count}` | 评论数 | `3` |
 | `{cover_url}` | 封面图链接。帖子没有设置封面时，按设置改用创作者主页封面；R-18 帖子在不允许发封面时为空 | `https://pixiv.pximg.net/c/1200x630_90_a2_g5/fanbox/public…` |
@@ -324,7 +323,7 @@ R-18 貼文預設不發送封面，卡片圖上的封面會換成「R-18 · 封�
 | 概覽 | 近 24 小時的推播數和每小時趨勢，以及訂閱的創作者數、檢查次數、下次檢查倒數、近 7 天推播數、錯誤數和總推播數。每位創作者有一張卡片，顯示推播篇數、檢查結果、每小時的檢查情況和最新貼文，按「預覽樣式」可以直接跳到即時預覽。 |
 | 推播紀錄 | 預設以 FANBOX 網頁的貼文卡片樣式顯示，封面左下角標明推播到了哪個對話、使用的樣式以及是否送達。紀錄依日期分組，也可以切換成清單。下方是最近的錯誤。 |
 | 訂閱 | 可以從 QQ 群組清單中選擇群組新增訂閱，也可以填 QQ 號碼訂閱私聊。每個對話各自獨立一區，可以預覽或取消訂閱。 |
-| 推播樣式 | 包含推播樣式、推送模板、卡片圖配文、顯示內容和卡片圖五組設定，模板中的變數按一下就能插入。右側是即時預覽，畫面較窄時排在設定下方。填入貼文連結（`https://<ID>.fanbox.cc/posts/<貼文編號>`）或創作者 ID 後，修改任何一項設定都會依新樣式重新產生，尚未儲存的修改也會反映在預覽中，預覽裡的一個對話泡泡就是 QQ 中的一則訊息。預覽下方可以測試推播，把這則訊息實際發送到選定的對話或私聊，需要按兩次確認。測試推播不影響訂閱進度，不計入統計，在推播紀錄中會標示為「測試」。 |
+| 推播樣式 | 選好推播樣式後，下方只顯示這種樣式用得到的設定：文字模板對應推送模板，卡片圖對應卡片圖配文和卡片圖外觀，切換時會有過渡動畫。模板中的變數按一下就能插入。右側是即時預覽，畫面較窄時排在設定下方。填入貼文連結（`https://<ID>.fanbox.cc/posts/<貼文編號>`）或創作者 ID 後，修改任何一項設定都會依新樣式重新產生，尚未儲存的修改也會反映在預覽中，預覽裡的一個對話泡泡就是 QQ 中的一則訊息。預覽下方可以測試推播，把這則訊息實際發送到選定的對話或私聊，需要按兩次確認。測試推播不影響訂閱進度，不計入統計，在推播紀錄中會標示為「測試」。 |
 | 設定 | 基本設定和推播起點。 |
 
 設定儲存後立即生效，不需要重新啟動，修改輪詢間隔後會馬上依新的間隔重新計時。
@@ -353,7 +352,7 @@ AstrBot 的插件頁面執行在受限的 iframe 中，無法開啟新視窗，�
 
 ## 設定
 
-設定分為 5 組，可以在 AstrBot 面板或插件頁面中修改。
+設定分為 5 組，可以在插件頁面或 AstrBot 內建的插件設定中修改。插件設定同樣只顯示目前推播樣式用得到的項目，但沒有訂閱管理、即時預覽和測試推播，建議使用插件頁面。
 
 **基本設定**
 
@@ -375,11 +374,11 @@ AstrBot 的插件頁面執行在受限的 iframe 中，無法開啟新視窗，�
 
 | 設定項目 | 預設值 | 說明 |
 |---|---|---|
-| `push_style` | text | `text` 依照推送模板發送；`card` 依照卡片圖配文模板發送卡片圖，卡片圖產生失敗時改為依照推送模板發送 |
+| `push_style` | card | `text` 依照推送模板發送；`card` 依照卡片圖配文模板發送卡片圖，卡片圖產生失敗時改為依照推送模板發送 |
 | `card_text` | merge | 卡片圖的配文方式，只在 `card` 樣式下生效。`merge` 依照配文模板的順序把文字和卡片圖合成一則訊息，`separate` 以卡片圖為界把上方文字、卡片圖和下方文字分開發送，`none` 只發送卡片圖 |
 | `message_template` | 見下文 | 推送模板，`text` 樣式使用，清空即恢復預設 |
 | `card_template` | 見下文 | 卡片圖配文模板，`card` 樣式使用，必須保留一個 `{card_image}`，清空即恢復預設 |
-| `send_cover` | 開 | 控制模板中的 `{cover_image}` 是否發送 |
+| `send_cover` | 關 | 文字模板樣式下，控制模板中的 `{cover_image}` 是否發送 |
 | `send_adult_cover` | 關 | R-18 貼文也發送封面，卡片圖中也顯示真實封面 |
 | `creator_cover_fallback` | 開 | 貼文沒有設定封面時，改用創作者主頁的封面圖，FANBOX 分享這類貼文時也是這樣處理的。對卡片圖和 `{cover_image}` 都有效，關閉後卡片圖會顯示灰色佔位圖 |
 
@@ -388,13 +387,13 @@ AstrBot 的插件頁面執行在受限的 iframe 中，無法開啟新視窗，�
 | 設定項目 | 預設值 | 說明 |
 |---|---|---|
 | `show_fee` | 開 | 顯示付費方案 |
-| `show_timezone` | 開 | 在時間後面加上「（北京时间）」這樣的時區名稱 |
+| `show_timezone` | 關 | 在時間後面加上「（日本时间）」這樣的時區名稱 |
 | `show_tags` | 開 | 顯示標籤 |
 | `show_adult_mark` | 開 | 顯示 R-18 標記 |
 | `excerpt_max_chars` | 120 | `{excerpt}` 的最大長度，設為 0 則不顯示 |
 | `max_tags` | 6 | 最多顯示幾個標籤 |
 | `time_format` | `%Y-%m-%d %H:%M` | `{published}` 和 `{updated}` 的時間格式（strftime 寫法） |
-| `timezone_offset_hours` | 8 | 時區，8 表示北京時間（UTC+8，與台灣相同），9 表示日本時間 |
+| `timezone_offset_hours` | 9 | 時區，9 表示日本時間（與 FANBOX 網頁一致），8 表示北京時間（UTC+8，與台灣相同） |
 
 **卡片圖**
 
@@ -424,16 +423,15 @@ AstrBot 的插件頁面執行在受限的 iframe 中，無法開啟新視窗，�
 
 ### 卡片圖配文模板
 
-推播樣式為 `card` 時使用這個模板。模板中的 `{card_image}` 就是卡片圖本身，必須保留，而且只能有一個。插件頁面的編輯器中刪不掉它；如果模板中沒有，插件會自動把它補在末尾。寫在 `{card_image}` 上面的文字顯示在卡片圖上方，寫在下面的文字顯示在卡片圖下方。其他變數和寫法規則與推送模板相同，但其他圖片變數在這裡會被忽略，因為卡片圖中已經有封面和頭像。預設模板在卡片圖上方放標題，下方放連結：
+推播樣式為 `card` 時使用這個模板。模板中的 `{card_image}` 就是卡片圖本身，必須保留，而且只能有一個。插件頁面的編輯器中刪不掉它；如果模板中沒有，插件會自動把它補在末尾。寫在 `{card_image}` 上面的文字顯示在卡片圖上方，寫在下面的文字顯示在卡片圖下方。其他變數和寫法規則與推送模板相同，但其他圖片變數在這裡會被忽略，因為卡片圖中已經有封面和頭像。預設模板在卡片圖上方放作者名稱和一句提示：
 
 ```
-【FANBOX】{creator_name} {headline}
-《{title}》
+{creator_name}
+发布了新的FANBOX文章：
 {card_image}
-{post_url}
 ```
 
-`card_text` 選擇 `merge` 時，上面這些內容在 QQ 中是一則訊息，標題在上，卡片圖在中間，連結在卡片圖下方。選擇 `separate`（插件頁面中叫「分开发」）時，會以卡片圖為界分開，上方文字、卡片圖和下方文字各發一則。選擇 `none` 時只發送卡片圖，不使用模板。
+`card_text` 選擇 `merge` 時，上面這些內容在 QQ 中是一則訊息，文字在上，卡片圖在下。想在卡片圖下方放貼文連結，在 `{card_image}` 下面加一行 `{post_url}` 即可。選擇 `separate`（插件頁面中叫「分开发」）時，會以卡片圖為界分開，上方文字、卡片圖和下方文字各發一則。選擇 `none` 時只發送卡片圖，不使用模板。
 
 在插件頁面中，可以用「把卡片图移到光标处」按鈕調整卡片圖在模板中的位置。
 
@@ -473,12 +471,12 @@ AstrBot 的插件頁面執行在受限的 iframe 中，無法開啟新視窗，�
 | `{tags}` | 標籤，寫成「#標籤1 #標籤2」，關閉「顯示標籤」時為空 | `#イラスト #メイキング` |
 | `{tags_plain}` | 標籤，用頓號連接成「標籤1、標籤2」，關閉「顯示標籤」時為空 | `イラスト、メイキング` |
 | `{tag_count}` | 標籤數量 | `2` |
-| `{published}` | 發布時間，依照「時間格式」和時區顯示，開啟「顯示時區」時後面帶「（北京时间）」 | `2026-11-13 20:12（北京时间）` |
+| `{published}` | 發布時間，依照「時間格式」和時區顯示，開啟「顯示時區」時後面帶「（北京时间）」 | `2026-11-13 21:12` |
 | `{published_date}` | 發布日期，例如 2026-11-13 | `2026-11-13` |
-| `{published_time}` | 發布時刻，例如 20:12 | `20:12` |
+| `{published_time}` | 發布時刻，例如 20:12 | `21:12` |
 | `{published_iso}` | FANBOX 原始的發布時間，日本時間的 ISO 格式 | `2026-11-13T21:12:54+09:00` |
-| `{updated}` | 最後更新時間，格式和 published 相同 | `2026-11-14 08:30（北京时间）` |
-| `{timezone}` | 時區名稱，例如「北京时间」，不受「顯示時區」影響 | `北京时间` |
+| `{updated}` | 最後更新時間，格式和 published 相同 | `2026-11-14 09:30` |
+| `{timezone}` | 時區名稱，例如「北京时间」，不受「顯示時區」影響 | `日本时间` |
 | `{like_count}` | 按讚數 | `12` |
 | `{comment_count}` | 留言數 | `3` |
 | `{cover_url}` | 封面圖連結。貼文沒有設定封面時，依照設定改用創作者主頁封面；R-18 貼文在不允許發送封面時為空 | `https://pixiv.pximg.net/c/1200x630_90_a2_g5/fanbox/public…` |
@@ -589,7 +587,7 @@ AstrBot の管理パネルで「プラグインページ → FANBOX 新帖推送
 | 概览（概要） | 直近 24 時間の通知数と時間ごとの推移、購読中のクリエイター数、チェック回数、次のチェックまでの残り時間、直近 7 日の通知数、エラー数、通知の総数。クリエイターごとのカードには、通知した件数、チェック結果、時間ごとのチェック状況、最新の投稿が表示され、「预览样式」からリアルタイムプレビューへ移動できます。 |
 | 推送记录（通知履歴） | 初期表示は FANBOX の投稿カード風です。カバー画像の左下に、通知先の会話、使ったスタイル、届いたかどうかが表示されます。履歴は日ごとにまとめられ、リスト表示にも切り替えられます。下には最近のエラーが表示されます。 |
 | 订阅（購読） | QQ のグループ一覧からグループを選んで購読を追加できます。QQ 番号を入力すれば個人チャットでも購読できます。会話ごとに区切って表示され、プレビューや購読解除ができます。 |
-| 推送样式（通知スタイル） | 通知スタイル、通知テンプレート、カードの添え文、表示内容、カード画像の 5 つの設定グループがあり、テンプレートの変数はクリックするだけで挿入できます。右側はリアルタイムプレビューで、画面が狭いときは設定の下に並びます。投稿のリンク（`https://<ID>.fanbox.cc/posts/<投稿番号>`）かクリエイター ID を入れると、設定を変えるたびに新しいスタイルで作り直され、保存前の変更もプレビューに反映されます。プレビューの吹き出し 1 つが QQ のメッセージ 1 件にあたります。プレビューの下からはテスト送信ができ、このメッセージを選んだ会話や個人チャットへ実際に送ります。送信には 2 回のクリックが必要です。テスト送信は購読の進み具合や統計には含まれず、通知履歴では「测试」と表示されます。 |
+| 推送样式（通知スタイル） | 通知スタイルを選ぶと、そのスタイルで使う設定だけが表示されます（テキストなら通知テンプレート、カードならカードの添え文とカード画像の設定）。切り替えるとアニメーションで入れ替わります。テンプレートの変数はクリックするだけで挿入できます。右側はリアルタイムプレビューで、画面が狭いときは設定の下に並びます。投稿のリンク（`https://<ID>.fanbox.cc/posts/<投稿番号>`）かクリエイター ID を入れると、設定を変えるたびに新しいスタイルで作り直され、保存前の変更もプレビューに反映されます。プレビューの吹き出し 1 つが QQ のメッセージ 1 件にあたります。プレビューの下からはテスト送信ができ、このメッセージを選んだ会話や個人チャットへ実際に送ります。送信には 2 回のクリックが必要です。テスト送信は購読の進み具合や統計には含まれず、通知履歴では「测试」と表示されます。 |
 | 设置（設定） | 基本設定と通知開始時点。 |
 
 設定は保存するとすぐに反映され、再起動は不要です。チェック間隔を変えると、新しい間隔ですぐに計測し直します。
@@ -618,7 +616,7 @@ AstrBot のプラグインページは制限付きの iframe で動いていて�
 
 ## 設定
 
-設定は 5 つのグループに分かれていて、AstrBot の管理パネルかプラグインページで変更できます。
+設定は 5 つのグループに分かれていて、プラグインページか AstrBot 標準のプラグイン設定で変更できます。プラグイン設定でも現在の通知スタイルで使う項目だけが表示されますが、購読の管理、リアルタイムプレビュー、テスト送信はないため、プラグインページの利用をおすすめします。
 
 **基本設定**
 
@@ -640,11 +638,11 @@ AstrBot のプラグインページは制限付きの iframe で動いていて�
 
 | 設定項目 | 初期値 | 説明 |
 |---|---|---|
-| `push_style` | text | `text` は通知テンプレートで送信、`card` はカード添え文テンプレートでカード画像を送信。カード画像の生成に失敗したときは通知テンプレートで送ります |
+| `push_style` | card | `text` は通知テンプレートで送信、`card` はカード添え文テンプレートでカード画像を送信。カード画像の生成に失敗したときは通知テンプレートで送ります |
 | `card_text` | merge | カード画像の添え文の送り方（`card` スタイルのときのみ有効）。`merge` は添え文テンプレートの順に文章とカード画像を 1 件のメッセージにまとめ、`separate` はカード画像を境に上の文章、カード画像、下の文章を別々に送り、`none` はカード画像だけを送ります |
 | `message_template` | 後述 | 通知テンプレート（`text` スタイル用）。空にすると初期値に戻ります |
 | `card_template` | 後述 | カード添え文テンプレート（`card` スタイル用）。`{card_image}` を必ず 1 つ残してください。空にすると初期値に戻ります |
-| `send_cover` | オン | テンプレートの `{cover_image}` を送るかどうか |
+| `send_cover` | オフ | テキストスタイルで、テンプレートの `{cover_image}` を送るかどうか |
 | `send_adult_cover` | オフ | R-18 の投稿でもカバー画像を送り、カード画像にも本来のカバーを表示する |
 | `creator_cover_fallback` | オン | 投稿にカバー画像が設定されていないとき、クリエイターページのカバー画像を代わりに使います。FANBOX がこうした投稿を共有するときと同じ動きです。カード画像と `{cover_image}` の両方に効き、オフにするとカード画像はグレーのプレースホルダーになります |
 
@@ -653,13 +651,13 @@ AstrBot のプラグインページは制限付きの iframe で動いていて�
 | 設定項目 | 初期値 | 説明 |
 |---|---|---|
 | `show_fee` | オン | 支援プランを表示する |
-| `show_timezone` | オン | 時刻の後ろに「（北京时间）」のようなタイムゾーン名を付ける |
+| `show_timezone` | オフ | 時刻の後ろに「（日本时间）」のようなタイムゾーン名を付ける |
 | `show_tags` | オン | タグを表示する |
 | `show_adult_mark` | オン | R-18 マークを表示する |
 | `excerpt_max_chars` | 120 | `{excerpt}` の最大文字数。0 にすると表示しない |
 | `max_tags` | 6 | 表示するタグの最大数 |
 | `time_format` | `%Y-%m-%d %H:%M` | `{published}` と `{updated}` の時刻の書式（strftime 形式） |
-| `timezone_offset_hours` | 8 | タイムゾーン。8 は北京時間、9 は日本時間 |
+| `timezone_offset_hours` | 9 | タイムゾーン。9 は日本時間（FANBOX の Web ページと同じ）、8 は北京時間 |
 
 **カード画像**
 
@@ -689,16 +687,15 @@ AstrBot のプラグインページは制限付きの iframe で動いていて�
 
 ### カード添え文テンプレート
 
-通知スタイルが `card` のときに使うテンプレートです。テンプレート内の `{card_image}` はカード画像そのもので、必ず 1 つだけ残す必要があります。プラグインページのエディタでは削除できず、テンプレートにない場合は末尾に自動で追加されます。`{card_image}` より上に書いた文章はカード画像の上に、下に書いた文章はカード画像の下に表示されます。そのほかの変数や書き方は通知テンプレートと同じですが、カード画像にはすでにカバーとアイコンが入っているため、ほかの画像変数はここでは無視されます。初期テンプレートでは、カード画像の上にタイトル、下にリンクを置いています。
+通知スタイルが `card` のときに使うテンプレートです。テンプレート内の `{card_image}` はカード画像そのもので、必ず 1 つだけ残す必要があります。プラグインページのエディタでは削除できず、テンプレートにない場合は末尾に自動で追加されます。`{card_image}` より上に書いた文章はカード画像の上に、下に書いた文章はカード画像の下に表示されます。そのほかの変数や書き方は通知テンプレートと同じですが、カード画像にはすでにカバーとアイコンが入っているため、ほかの画像変数はここでは無視されます。初期テンプレートでは、カード画像の上にクリエイター名と一言を置いています。
 
 ```
-【FANBOX】{creator_name} {headline}
-《{title}》
+{creator_name}
+发布了新的FANBOX文章：
 {card_image}
-{post_url}
 ```
 
-`card_text` が `merge` のとき、これらは QQ で 1 件のメッセージになり、タイトルが上、カード画像が中央、リンクがカード画像の下に並びます。`separate`（プラグインページでは「分开发」）のときは、カード画像を境に上の文章、カード画像、下の文章をそれぞれ 1 件ずつ送ります。`none` のときはカード画像だけを送り、テンプレートは使いません。
+`card_text` が `merge` のとき、これらは QQ で 1 件のメッセージになり、文章が上、カード画像が下に並びます。カード画像の下に投稿へのリンクを置きたいときは、`{card_image}` の下に `{post_url}` の行を加えてください。`separate`（プラグインページでは「分开发」）のときは、カード画像を境に上の文章、カード画像、下の文章をそれぞれ 1 件ずつ送ります。`none` のときはカード画像だけを送り、テンプレートは使いません。
 
 プラグインページでは「把卡片图移到光标处」ボタンで、テンプレート内のカード画像の位置を移動できます。
 
@@ -738,12 +735,12 @@ AstrBot のプラグインページは制限付きの iframe で動いていて�
 | `{tags}` | タグを「#タグ1 #タグ2」の形で並べたもの。「タグを表示」がオフなら空 | `#イラスト #メイキング` |
 | `{tags_plain}` | タグを読点でつないだもの（「タグ1、タグ2」）。「タグを表示」がオフなら空 | `イラスト、メイキング` |
 | `{tag_count}` | タグの数 | `2` |
-| `{published}` | 公開日時。「時刻の書式」とタイムゾーンに沿って表示し、「タイムゾーン名を表示」がオンなら後ろに「（北京时间）」が付きます | `2026-11-13 20:12（北京时间）` |
+| `{published}` | 公開日時。「時刻の書式」とタイムゾーンに沿って表示し、「タイムゾーン名を表示」がオンなら後ろに「（北京时间）」が付きます | `2026-11-13 21:12` |
 | `{published_date}` | 公開日（例：2026-11-13） | `2026-11-13` |
-| `{published_time}` | 公開時刻（例：20:12） | `20:12` |
+| `{published_time}` | 公開時刻（例：20:12） | `21:12` |
 | `{published_iso}` | FANBOX の元の公開日時（日本時間の ISO 形式） | `2026-11-13T21:12:54+09:00` |
-| `{updated}` | 最終更新日時。書式は published と同じ | `2026-11-14 08:30（北京时间）` |
-| `{timezone}` | タイムゾーン名（例：「北京时间」）。「タイムゾーン名を表示」の設定に関係なく入ります | `北京时间` |
+| `{updated}` | 最終更新日時。書式は published と同じ | `2026-11-14 09:30` |
+| `{timezone}` | タイムゾーン名（例：「北京时间」）。「タイムゾーン名を表示」の設定に関係なく入ります | `日本时间` |
 | `{like_count}` | いいね数 | `12` |
 | `{comment_count}` | コメント数 | `3` |
 | `{cover_url}` | カバー画像のリンク。投稿にカバーがないときは設定に従ってクリエイターページのカバーを使い、R-18 の投稿でカバーを送らない設定のときは空 | `https://pixiv.pximg.net/c/1200x630_90_a2_g5/fanbox/public…` |
@@ -856,7 +853,7 @@ The page itself is in Chinese. The table gives each tab's name followed by a tra
 | 概览 (Overview) | Pushes in the last 24 hours with an hourly trend, plus the number of followed creators, checks, a countdown to the next check, pushes in the last 7 days, errors and total pushes. Each creator gets a card showing posts pushed, check results, hourly check activity and the latest post. "预览样式" (preview style) takes you straight to the live preview. |
 | 推送记录 (Push history) | Shown as FANBOX-style post cards by default. The lower-left corner of each cover tells you which chat it was sent to, which style was used and whether it was delivered. Entries are grouped by day and can be switched to a list. Recent errors are listed below. |
 | 订阅 (Subscriptions) | Add a subscription by picking a group from your QQ group list, or enter a QQ number to subscribe in a private chat. Each chat has its own block where you can preview or unsubscribe. |
-| 推送样式 (Push style) | Five groups of settings: push style, push template, card caption, displayed content and card image. Click a variable to insert it into a template. The live preview sits on the right, or below the settings on narrow screens. After you enter a post link (`https://<ID>.fanbox.cc/posts/<post number>`) or a creator ID, every change to the settings re-renders the preview in the new style, including unsaved changes. Each bubble in the preview is one QQ message. Below the preview you can send a test push of that message to a chosen chat or private chat; it takes two clicks to confirm. Test pushes don't advance subscription progress, aren't counted in the statistics, and are marked "测试" (test) in the push history. |
+| 推送样式 (Push style) | Once you pick a push style, only the settings that style uses are shown: the push template for the text style, or the card caption and card image settings for the card style. Switching styles animates the groups in and out. Click a variable to insert it into a template. The live preview sits on the right, or below the settings on narrow screens. After you enter a post link (`https://<ID>.fanbox.cc/posts/<post number>`) or a creator ID, every change to the settings re-renders the preview in the new style, including unsaved changes. Each bubble in the preview is one QQ message. Below the preview you can send a test push of that message to a chosen chat or private chat; it takes two clicks to confirm. Test pushes don't advance subscription progress, aren't counted in the statistics, and are marked "测试" (test) in the push history. |
 | 设置 (Settings) | Basic settings and push start point. |
 
 Settings take effect as soon as you save them, with no restart needed. Changing the polling interval restarts the timer with the new interval right away.
@@ -885,7 +882,7 @@ Whichever start point you choose, each post is pushed to the same chat only once
 
 ## Settings
 
-The settings come in 5 groups and can be changed in the AstrBot dashboard or on the plugin page.
+The settings come in 5 groups and can be changed on the plugin page or in AstrBot's built-in plugin settings. The built-in settings also show only the items the current push style uses, but they lack subscription management, the live preview and test pushes, so the plugin page is recommended.
 
 **Basic settings**
 
@@ -907,11 +904,11 @@ The settings come in 5 groups and can be changed in the AstrBot dashboard or on 
 
 | Setting | Default | Description |
 |---|---|---|
-| `push_style` | text | `text` sends messages from the push template; `card` sends a card image using the card caption template, and falls back to the push template if the card can't be rendered |
+| `push_style` | card | `text` sends messages from the push template; `card` sends a card image using the card caption template, and falls back to the push template if the card can't be rendered |
 | `card_text` | merge | How captions go with the card image (only for the `card` style). `merge` combines the text and the card into one message in template order, `separate` sends the text above the card, the card and the text below the card as separate messages, and `none` sends only the card |
 | `message_template` | see below | Push template for the `text` style. Clear it to restore the default |
 | `card_template` | see below | Card caption template for the `card` style. It must keep exactly one `{card_image}`. Clear it to restore the default |
-| `send_cover` | on | Whether `{cover_image}` in templates is sent |
+| `send_cover` | off | For the text style, whether `{cover_image}` in templates is sent |
 | `send_adult_cover` | off | Send covers for R-18 posts too, and show the real cover on card images |
 | `creator_cover_fallback` | on | When a post has no cover, use the creator page's cover instead, the same image FANBOX uses when sharing such posts. Applies to both card images and `{cover_image}`; when turned off, the card shows a gray placeholder |
 
@@ -920,13 +917,13 @@ The settings come in 5 groups and can be changed in the AstrBot dashboard or on 
 | Setting | Default | Description |
 |---|---|---|
 | `show_fee` | on | Show the paid plan |
-| `show_timezone` | on | Add a timezone name such as "（北京时间）" after times |
+| `show_timezone` | off | Add a timezone name such as "（日本时间）" after times |
 | `show_tags` | on | Show tags |
 | `show_adult_mark` | on | Show the R-18 mark |
 | `excerpt_max_chars` | 120 | Maximum length of `{excerpt}`; 0 hides it |
 | `max_tags` | 6 | The most tags to show |
 | `time_format` | `%Y-%m-%d %H:%M` | Time format for `{published}` and `{updated}` (strftime syntax) |
-| `timezone_offset_hours` | 8 | Timezone offset: 8 is Beijing time, 9 is Japan time |
+| `timezone_offset_hours` | 9 | Timezone offset: 9 is Japan time (as on the FANBOX website), 8 is Beijing time |
 
 **Card image**
 
@@ -956,16 +953,15 @@ The plugin's output text is in Simplified Chinese, so the templates and sample v
 
 ### Card caption template
 
-This template is used when the push style is `card`. The `{card_image}` in it is the card image itself: it has to stay, and there can only be one. The editor on the plugin page won't let you delete it, and if a template is missing it, the plugin adds it at the end. Text written above `{card_image}` appears above the card, and text written below it appears below the card. Other variables and rules work the same as in the push template, but other image variables are ignored here, since the card already contains the cover and avatar. The default template puts the title above the card and the link below it:
+This template is used when the push style is `card`. The `{card_image}` in it is the card image itself: it has to stay, and there can only be one. The editor on the plugin page won't let you delete it, and if a template is missing it, the plugin adds it at the end. Text written above `{card_image}` appears above the card, and text written below it appears below the card. Other variables and rules work the same as in the push template, but other image variables are ignored here, since the card already contains the cover and avatar. The default template puts the creator's name and a short line above the card:
 
 ```
-【FANBOX】{creator_name} {headline}
-《{title}》
+{creator_name}
+发布了新的FANBOX文章：
 {card_image}
-{post_url}
 ```
 
-With `card_text` set to `merge`, all of this is one QQ message: the title on top, the card in the middle and the link under the card. With `separate` (called "分开发" on the plugin page), the message is split at the card, and the text above, the card and the text below are sent one by one. With `none`, only the card is sent and the template isn't used.
+With `card_text` set to `merge`, all of this is one QQ message, with the text on top and the card below. To put the post link under the card, add a `{post_url}` line below `{card_image}`. With `separate` (called "分开发" on the plugin page), the message is split at the card, and the text above, the card and the text below are sent one by one. With `none`, only the card is sent and the template isn't used.
 
 On the plugin page, the "把卡片图移到光标处" (move card to cursor) button moves the card to a different spot in the template.
 
@@ -1005,12 +1001,12 @@ The sample values come from a paid post on the 500 yen plan, with every setting 
 | `{tags}` | Tags written as "#tag1 #tag2"; empty when "show tags" is off | `#イラスト #メイキング` |
 | `{tags_plain}` | Tags joined as "tag1、tag2"; empty when "show tags" is off | `イラスト、メイキング` |
 | `{tag_count}` | Number of tags | `2` |
-| `{published}` | Publication time in the "time format" and timezone, followed by "（北京时间）" when "show the timezone" is on | `2026-11-13 20:12（北京时间）` |
+| `{published}` | Publication time in the "time format" and timezone, followed by "（北京时间）" when "show the timezone" is on | `2026-11-13 21:12` |
 | `{published_date}` | Publication date, such as 2026-11-13 | `2026-11-13` |
-| `{published_time}` | Publication time of day, such as 20:12 | `20:12` |
+| `{published_time}` | Publication time of day, such as 20:12 | `21:12` |
 | `{published_iso}` | FANBOX's original publication time, in ISO format in Japan time | `2026-11-13T21:12:54+09:00` |
-| `{updated}` | Last update time, in the same format as published | `2026-11-14 08:30（北京时间）` |
-| `{timezone}` | Timezone name, such as "北京时间" (Beijing time); not affected by "show the timezone" | `北京时间` |
+| `{updated}` | Last update time, in the same format as published | `2026-11-14 09:30` |
+| `{timezone}` | Timezone name, such as "北京时间" (Beijing time); not affected by "show the timezone" | `日本时间` |
 | `{like_count}` | Number of likes | `12` |
 | `{comment_count}` | Number of comments | `3` |
 | `{cover_url}` | Link to the cover image. When the post has no cover, the creator page's cover is used depending on the setting; empty for R-18 posts when their covers aren't allowed | `https://pixiv.pximg.net/c/1200x630_90_a2_g5/fanbox/public…` |

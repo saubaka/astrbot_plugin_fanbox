@@ -2,7 +2,7 @@
   "basic": {
     "description": "基础设置",
     "type": "object",
-    "hint": "轮询频率和网络。",
+    "hint": "这里的设置项不全：订阅管理、实时预览、测试推送和模板的变量插入都只在插件页面里有。建议到「插件页面 → FANBOX 新帖推送」里修改设置，体验最好。",
     "items": {
       "poll_interval_minutes": {
         "description": "轮询间隔（分钟）",
@@ -22,7 +22,8 @@
         "default": "",
         "hint": "例如 http://127.0.0.1:7890。只用于访问 FANBOX 和下载图片。"
       }
-    }
+    },
+    "obvious_hint": true
   },
   "start": {
     "description": "推送起点",
@@ -38,13 +39,21 @@
           "subscribe",
           "custom"
         ],
-        "hint": "deploy = 插件第一次启动的时间（默认）；subscribe = 每个订阅各自的订阅时间；custom = 下面填写的自定义时间。早于起点发布的帖子一律不推送，推送过的也不会重复。"
+        "hint": "插件部署时间（默认）：插件第一次启动之后发布的帖子；订阅时间：每个订阅从订阅那一刻开始；自定义时间：下面填写的时间之后。早于起点发布的帖子一律不推送，推送过的也不会重复。",
+        "labels": [
+          "插件部署时间",
+          "订阅时间",
+          "自定义时间"
+        ]
       },
       "start_time": {
         "description": "自定义起点时间",
         "type": "string",
         "default": "",
-        "hint": "推送起点选 custom 时生效。例如 2026-11-15 08:00，按“显示内容 → 时区”理解；填不对时改用部署时间，日志里会提示。"
+        "hint": "推送起点选 custom 时生效。例如 2026-11-15 08:00，按“显示内容 → 时区”理解；填不对时改用部署时间，日志里会提示。",
+        "condition": {
+          "start_from": "custom"
+        }
       },
       "max_post_age_hours": {
         "description": "不推送发布超过几小时的帖子",
@@ -57,17 +66,21 @@
   "style": {
     "description": "推送样式",
     "type": "object",
-    "hint": "选择发文字还是卡片图、卡片图怎么配文字，以及两种样式各自的模板。",
+    "hint": "先选推送样式，下面只会显示这种样式用得到的设置。",
     "items": {
       "push_style": {
         "description": "推送样式",
         "type": "string",
-        "default": "text",
+        "default": "card",
         "options": [
           "text",
           "card"
         ],
-        "hint": "text = 按下面的“推送模板”发消息（模板里也可以插入图片，包括 {card_image} 卡片图）；card = 按“卡片图配文模板”发仿 FANBOX 网页样式的卡片图，卡片图上下都可以配文字（渲染失败时自动改发推送模板）。"
+        "hint": "文字模板：按“推送模板”发消息，模板里也可以插入图片。卡片图：发一张仿 FANBOX 网页样式的卡片图，卡片图上下可以配文字，渲染失败时自动改发推送模板。",
+        "labels": [
+          "文字模板",
+          "卡片图"
+        ]
       },
       "card_text": {
         "description": "卡片图配文",
@@ -78,25 +91,42 @@
           "separate",
           "none"
         ],
-        "hint": "推送样式为 card 时生效。merge = 按配文模板的顺序，把文字和卡片图合成一条消息（原生的文字加图片，不是合并转发），卡片图上下都可以放文字；separate = 以卡片图为界切开，上方文字、卡片图、下方文字各发一条；none = 只发卡片图。"
+        "hint": "合成一条：按配文模板的顺序，把文字和卡片图合成一条消息（原生的文字加图片，不是合并转发）。分开发：以卡片图为界，上方文字、卡片图、下方文字各发一条。只发卡片图：不发文字。",
+        "labels": [
+          "合成一条",
+          "分开发",
+          "只发卡片图"
+        ],
+        "condition": {
+          "push_style": "card"
+        }
       },
       "message_template": {
         "description": "推送模板",
         "type": "text",
         "default": "【FANBOX】{creator_name} {headline}\n《{title}》\n{labels}\n{excerpt}\n{tags}\n?发布时间：{published}\n{post_url}\n{cover_image}",
-        "hint": "常用变量：{creator_name} 昵称、{title} 标题、{labels} 档位、{excerpt} 摘要、{tags} 标签、{published} 发布时间、{post_url} 链接、{cover_image} 封面图、{card_image} 卡片图。全部 33 个变量和写法规则见插件 README，也可以在 QQ 里发 /fanbox变量 查看。清空即恢复默认模板。"
+        "hint": "常用变量：{creator_name} 昵称、{title} 标题、{labels} 档位、{excerpt} 摘要、{tags} 标签、{published} 发布时间、{post_url} 链接、{cover_image} 封面图、{card_image} 卡片图。全部 33 个变量和写法规则见插件 README，也可以在 QQ 里发 /fanbox变量 查看。清空即恢复默认模板。",
+        "condition": {
+          "push_style": "text"
+        }
       },
       "card_template": {
         "description": "卡片图配文模板",
         "type": "text",
-        "default": "【FANBOX】{creator_name} {headline}\n《{title}》\n{card_image}\n{post_url}",
-        "hint": "推送样式为 card 时使用。{card_image} 是卡片图本身，必须保留且只能有一个：写在它上面的文字在卡片图上方，写在它下面的文字（比如链接）在卡片图下方。其他变量和写法与推送模板相同，其他图片变量在这里会被忽略。清空即恢复默认。"
+        "default": "{creator_name}\n发布了新的FANBOX文章：\n{card_image}",
+        "hint": "{card_image} 是卡片图本身，必须保留且只能有一个：写在它上面的文字在卡片图上方，写在它下面的文字（比如 {post_url} 链接）在卡片图下方。其他变量和写法与推送模板相同，其他图片变量在这里会被忽略。清空即恢复默认。",
+        "condition": {
+          "push_style": "card"
+        }
       },
       "send_cover": {
         "description": "附带封面图",
         "type": "bool",
-        "default": true,
-        "hint": "控制模板里的 {cover_image}，付费帖也有封面。卡片图不受此项影响。"
+        "default": false,
+        "hint": "控制模板里的 {cover_image}，付费帖也有封面。卡片图不受此项影响。",
+        "condition": {
+          "push_style": "text"
+        }
       },
       "send_adult_cover": {
         "description": "R-18 帖子也附带封面图",
@@ -126,8 +156,8 @@
       "show_timezone": {
         "description": "显示时区",
         "type": "bool",
-        "default": true,
-        "hint": "开启时 {published}、{updated} 和卡片日期后面带“（北京时间）”这样的时区名。"
+        "default": false,
+        "hint": "开启时 {published}、{updated} 和卡片日期后面带“（日本时间）”这样的时区名。"
       },
       "show_tags": {
         "description": "显示标签",
@@ -162,15 +192,15 @@
       "timezone_offset_hours": {
         "description": "时区（相对 UTC 的小时数）",
         "type": "int",
-        "default": 8,
-        "hint": "8 = 北京时间，9 = 日本时间，13 = 新西兰夏令时。"
+        "default": 9,
+        "hint": "9 = 日本时间（默认，和 FANBOX 网页一致），8 = 北京时间，13 = 新西兰夏令时。"
       }
     }
   },
   "card": {
     "description": "卡片图",
     "type": "object",
-    "hint": "推送样式为 card，或模板里用了 {card_image} 时生效。",
+    "hint": "卡片图的外观。只在推送样式为卡片图时显示；文字模板里用到 {card_image} 时，请在插件页面里调整。",
     "items": {
       "card_show_likes": {
         "description": "卡片显示点赞数",
@@ -199,6 +229,9 @@
         "type": "string",
         "default": ""
       }
+    },
+    "condition": {
+      "style.push_style": "card"
     }
   }
 }
