@@ -19,6 +19,7 @@ from fanbox_core import (
 )
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+README_FILES = ("README.md", "README.zh-TW.md", "README.ja.md", "README.en.md")
 
 
 def make_post(**kw):
@@ -153,9 +154,10 @@ def test_schema_template_and_readme_cover_every_variable():
     assert tpl["type"] == "text"
     assert tpl["default"] == DEFAULT_TEMPLATE
     assert "README" in tpl["hint"] and len(tpl["hint"]) < 300  # 插件页里只列常用变量
-    readme = (ROOT / "README.md").read_text("utf-8")
-    for name in list(TEXT_VARIABLES) + list(IMAGE_VARIABLES):
-        assert "| `{" + name + "}` |" in readme, name
+    for readme_name in README_FILES:
+        readme = (ROOT / readme_name).read_text("utf-8")
+        for name in list(TEXT_VARIABLES) + list(IMAGE_VARIABLES):
+            assert "| `{" + name + "}` |" in readme, (readme_name, name)
     assert schema["style"]["items"]["push_style"]["options"] == ["text", "card"]
     assert schema["style"]["items"]["send_adult_cover"]["default"] is False
     start = schema["start"]["items"]

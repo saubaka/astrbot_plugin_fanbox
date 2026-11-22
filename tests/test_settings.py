@@ -155,10 +155,29 @@ def test_every_int_item_has_a_range_and_ranges_match_schema():
         assert k in sections
 
 
+README_FILES = ("README.md", "README.zh-TW.md", "README.ja.md", "README.en.md")
+README_BASE = "https://github.com/saubaka/astrbot_plugin_fanbox/blob/main/"
+
+
 def test_readme_lists_every_setting():
-    readme = (ROOT / "README.md").read_text("utf-8")
-    for key in key_sections(SCHEMA):
-        assert f"`{key}`" in readme, key
+    for name in README_FILES:
+        readme = (ROOT / name).read_text("utf-8")
+        for key in key_sections(SCHEMA):
+            assert f"`{key}`" in readme, (name, key)
+
+
+def test_readme_languages_link_to_each_other():
+    # 每种语言一个文件，顶部用链接互相跳转；用绝对地址，在 AstrBot 里打开也能跳
+    for name in README_FILES:
+        readme = (ROOT / name).read_text("utf-8")
+        head = readme[: readme.index("## ")]
+        assert "<details" not in readme, name
+        for other in README_FILES:
+            if other == name:
+                assert f'href="{README_BASE}{other}"' not in head, name
+            else:
+                assert f'href="{README_BASE}{other}"' in head, (name, other)
+        assert head.count("<b>") == 1, name
 
 
 def test_page_files_exist():
